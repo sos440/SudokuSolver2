@@ -188,14 +188,14 @@ class PuzzleConnectivity {
         const output = new PuzzleConnectivity();
 
         /** Loop for computing the connectivity. */
-        Address.ad.map(addr => {
+        for(const addr of Address.ad){
             if (source.readAt(addr) == State.OCCUPIED) {
                 output.rc[addr.rc].push(addr);
                 output.rk[addr.rk].push(addr);
                 output.ck[addr.ck].push(addr);
                 output.bk[addr.bk].push(addr);
             }
-        });
+        }
 
         return output;
     }
@@ -271,11 +271,11 @@ class Strategies {
                 strong: parsed[1].split('|'),
                 weak: parsed[2].split('|'),
                 loop(callback) {
-                    this.strong.forEach(type_s =>
-                        this.weak.forEach(type_w =>
-                            callback(type_s, type_w)
-                        )
-                    );
+                    for (const type_s of this.strong){
+                        for (const type_w of this.weak){
+                            callback(type_s, type_w);
+                        }
+                    }
                 }
             };
         }

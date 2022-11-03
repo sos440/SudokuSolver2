@@ -204,7 +204,7 @@ SVG.on(document, 'DOMContentLoaded', function () {
     document.querySelector('#move_prev').addEventListener('click', e => {
         o_log.replaceChildren();
         if (cur_page == 0) {
-            o_log.appendChild(document.createTextNode('This is the initial puzzle.'));
+            o_log.appendChild(document.createTextNode('This is already the initial puzzle. You cannot go further back.'));
             return;
         }
         else {
