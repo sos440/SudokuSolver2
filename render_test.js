@@ -26,7 +26,7 @@ class PuzzleGraphics {
         });
 
         /** Render cells and pencilmarks. */
-        const conn = Puzzle.computeConnectivity(source);
+        const conn = PuzzleConnectivity.compute(source);
         conn.rc.forEach((cur_lu, grid) => {
             /* Draw the cell face. */
             const param_pos = [Math.trunc(grid / D1), grid % D1];
@@ -131,46 +131,87 @@ SVG.on(document, 'DOMContentLoaded', function () {
     const cur_puzzle = Puzzle.importFromString('107900025000007006300208100010000080805704603030000010001309000500000009690002070');
 
     /** Initialize the graphics wrapper. */
-    let gp = new PuzzleGraphics();
-    gp.renderSVG(cur_puzzle).addTo(o_disp);
+    const gp = new PuzzleGraphics();
 
-    let msg = new StrategyMessage({ puzzle: cur_puzzle });
-    document.querySelector('#move_next').addEventListener('click', e => {
-        o_log.replaceChildren();
-
-        /** Test the strategies sequentially. */
-        (_ => {
-            const conn = msg.getConnectivity();
-            msg = Strategies.nakedSingle(msg);
-            if (msg.isUpdated) {
-                return;
-            }
-
-            msg.conn = conn;
-            msg = Strategies.hiddneSingle(msg);
-            if (msg.isUpdated) {
-                return;
-            }
-
-            return;
-        })();
-
-        /** Log and exit when there are no updates. */
-        if (!msg.isUpdated) {
-            o_log.appendChild(document.createTextNode('No updates!'));
-            return;
-        }
-
-        /** Redraw the puzzle. */
+    /**
+     * Display the puzzle.
+     * @param {PuzzleMessage} msg The current message to display. 
+     */
+    const gp_render_puzzle = (msg) => {
         o_disp.replaceChildren();
         gp.renderSVG(msg.puzzle).addTo(o_disp);
+    }
 
-        /** Make logs. */
+    /**
+     * Display the message logs.
+     * @param {PuzzleMessage} msg The current message to display. 
+     */
+    const gp_render_msg = (msg) => {
         for (const [key, msg_list] of Object.entries(msg.groupedMsgs)) {
             let msg_node = document.createElement('p');
             msg_node.appendChild(document.createTextNode(`${msg_list[0]?.addr_weak} unmarked by ${msg.type}: `));
-            msg_node.appendChild(document.createTextNode(msg_list.map(o => `${o.addr_strong} in ${o.type_strong} => ${o.type_weak}`).join(', ')));
+            msg_node.appendChild(document.createTextNode(msg_list.map(o => `${o.addr_strong} in S{${o.type_strong}} => W{${o.type_weak}}`).join(', ')));
             o_log.appendChild(msg_node);
+        }
+    }
+
+    /** History navigation. */
+    const arr_history = [new StrategyMessage({ puzzle: cur_puzzle })];
+    let cur_page = 0;
+
+    /** Initial display. */
+    gp_render_puzzle(arr_history[0]);
+
+    /** Next button. */
+    document.querySelector('#move_next').addEventListener('click', e => {
+        o_log.replaceChildren();
+        cur_page++;
+
+        /** Test the strategies sequentially. */
+        const msg = (_ => {
+            if (cur_page == arr_history.length) {
+                console.log(`Computation ${cur_page}.`);
+
+                let msg = new StrategyMessage(arr_history.at(-1));
+                const conn = PuzzleConnectivity.compute(msg.puzzle);
+
+                for (const strategy of [
+                    Strategies.nakedSingle,
+                    Strategies.hiddneSingle
+                ]) {
+                    msg.conn = conn;
+                    msg = strategy(msg);
+                    if (msg.isUpdated) {
+                        arr_history.push(msg);
+                        return msg;
+                    }
+                }
+                /** If no updates, then revert the increment. */
+                cur_page--;
+                o_log.appendChild(document.createTextNode('Strategies found no improvements.'));
+            }
+            /** ...and return the last puzzle. */
+            return arr_history[cur_page];
+        })();
+
+        if (msg.isUpdated){
+            gp_render_puzzle(msg);
+        }
+        gp_render_msg(msg);
+    });
+
+    /** Prev button. */
+    document.querySelector('#move_prev').addEventListener('click', e => {
+        o_log.replaceChildren();
+        if (cur_page == 0) {
+            o_log.appendChild(document.createTextNode('This is the initial puzzle.'));
+            return;
+        }
+        else {
+            cur_page--;
+            const msg = arr_history[cur_page];
+            gp_render_puzzle(msg);
+            gp_render_msg(msg);
         }
     });
 });

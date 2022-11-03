@@ -56,7 +56,7 @@ class Address {
     static D3List = Array.from({ length: D3 }).map((_, i) => i);
 
     /** Precomputed addresses. Must use these ones when referring to a position! */
-    static addresses = Address.D3List.map(index => new Address(index));
+    static ad = Address.D3List.map(index => new Address(index));
 }
 
 
@@ -125,11 +125,11 @@ class Puzzle {
         if (format == 'simple') {
             Array.from(str).forEach((c, grid) => {
                 if ('1' <= c && c <= '9') {
-                    puzzle.markAt(Address.addresses[grid * D1 + parseInt(c) - 1]);
+                    puzzle.markAt(Address.ad[grid * D1 + parseInt(c) - 1]);
                 }
                 else {
                     Address.D1List.forEach(key => {
-                        puzzle.markAt(Address.addresses[grid * D1 + key]);
+                        puzzle.markAt(Address.ad[grid * D1 + key]);
                     });
                 }
             });
@@ -147,28 +147,6 @@ class Puzzle {
      * @returns {string} The simple string.
      */
     static exportToString(source, format) {
-    }
-
-    /**
-     * Compute the connectivity information of the given puzzle.
-     * @param {Puzzle} source An input message containing the source puzzle.
-     * @return {PuzzleConnectivity} The computed connectivity information of the source.
-     */
-    static computeConnectivity(source) {
-        /** The output message. */
-        const output = new PuzzleConnectivity();
-
-        /** Loop for computing the connectivity. */
-        Address.addresses.map(addr => {
-            if (source.readAt(addr) == State.OCCUPIED) {
-                output.rc[addr.rc].push(addr);
-                output.rk[addr.rk].push(addr);
-                output.ck[addr.ck].push(addr);
-                output.bk[addr.bk].push(addr);
-            }
-        });
-
-        return output;
     }
 }
 
@@ -198,6 +176,28 @@ class PuzzleConnectivity {
          * @type {Address[][]}
          */
         this.bk = Address.D2List.map(_ => []);
+    }
+
+    /**
+     * Compute the connectivity information of the given puzzle.
+     * @param {Puzzle} source An input message containing the source puzzle.
+     * @return {PuzzleConnectivity} The computed connectivity information of the source.
+     */
+    static compute(source) {
+        /** The output message. */
+        const output = new PuzzleConnectivity();
+
+        /** Loop for computing the connectivity. */
+        Address.ad.map(addr => {
+            if (source.readAt(addr) == State.OCCUPIED) {
+                output.rc[addr.rc].push(addr);
+                output.rk[addr.rk].push(addr);
+                output.ck[addr.ck].push(addr);
+                output.bk[addr.bk].push(addr);
+            }
+        });
+
+        return output;
     }
 }
 
@@ -234,7 +234,7 @@ class StrategyMessage {
      */
     getConnectivity() {
         if (this.conn == null && this.puzzle != null) {
-            this.conn = Puzzle.computeConnectivity(this.puzzle);
+            this.conn = PuzzleConnectivity.compute(this.puzzle);
         }
         return this.conn;
     }
@@ -271,9 +271,9 @@ class Strategies {
                 strong: parsed[1].split('|'),
                 weak: parsed[2].split('|'),
                 loop(callback) {
-                    this.strong.forEach(
-                        type_s => this.weak.forEach(
-                            type_w => callback(type_s, type_w)
+                    this.strong.forEach(type_s =>
+                        this.weak.forEach(type_w =>
+                            callback(type_s, type_w)
                         )
                     );
                 }
@@ -302,24 +302,29 @@ class Strategies {
      * @param {function} callback The callback function invoked each time a position is unmarked.
      */
     static lockingOrder1Rank0(conn, type_s, type_w, callback) {
+        /** @type {Address[][]} */
+        const luarr_s = conn[type_s];
+        /** @type {Address[][]} */
+        const luarr_w = conn[type_w];
+
         /** Loop through the logical units in search of strong ones. */
-        conn[type_s].forEach(cur_lu => {
+        for (const cur_lu of luarr_s) {
             /** If the current logical unit is strong, */
             if (cur_lu.length == 1) {
                 const addr_s = cur_lu[0];
-                conn[type_w][addr_s[type_w]].forEach(addr_w => {
-                    if (addr_s.index == addr_w.index) {
-                        return;
+                /** Loop through all the other positions in the weak logical unit. */
+                for (const addr_w of luarr_w[addr_s[type_w]]) {
+                    if (addr_s.index != addr_w.index) {
+                        callback({
+                            type_strong: type_s,
+                            type_weak: type_w,
+                            addr_strong: addr_s,
+                            addr_weak: addr_w
+                        });
                     }
-                    callback({
-                        type_strong: type_s,
-                        type_weak: type_w,
-                        addr_strong: addr_s,
-                        addr_weak: addr_w
-                    });
-                });
+                }
             }
-        });
+        }
     }
 
     /**
