@@ -603,7 +603,7 @@ class Strategies {
                         /** Update the flag 'isUpdated' and evidences. */
                         msg_output.isUpdated = true;
                         msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2)
+                            Puzzle.GK2I(grid, key2),
                             {
                                 unit: 'box',
                                 index: Puzzle.GK2I(grid, key2)
@@ -635,7 +635,7 @@ class Strategies {
                         /** Update the flag 'isUpdated' and evidences. */
                         msg_output.isUpdated = true;
                         msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2)
+                            Puzzle.GK2I(grid, key2),
                             {
                                 unit: 'row',
                                 index: Puzzle.GK2I(grid, key2)
@@ -667,7 +667,7 @@ class Strategies {
                         /** Update the flag 'isUpdated' and evidences. */
                         msg_output.isUpdated = true;
                         msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2)
+                            Puzzle.GK2I(grid, key2),
                             {
                                 unit: 'col',
                                 index: Puzzle.GK2I(grid, key2)
