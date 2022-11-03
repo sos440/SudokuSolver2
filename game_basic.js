@@ -20,61 +20,44 @@ const State = {
 
 
 /**
- * A namespace for various constants
- * @namespace
+ * Address structure for Sudoku puzzle.
  */
-const Constants = (() => {
-    /** 
-     * Since we are computing constants, performance is not a serious issue
-     * and hence functional paradigm can be used.
-     */
-
-    /** An integer interval from 0 to D1. */
-    const list_D1 = Array.from({ length: D1 }).map((_, x) => x);
-
-    /** An integer interval from 0 to D2. */
-    const list_D2 = Array.from({ length: D2 }).map((_, x) => x);
-
-    /** An integer interval from 0 to D3. */
-    const list_D3 = Array.from({ length: D3 }).map((_, x) => x);
-
-    /** A conversion map (index) => Uint8Array([row, site, box, site]). */
-    const g_to_rcbs = list_D3.map((grid) => {
-        const col = grid % D1;
-        const row = Math.trunc(grid / D1);
-        const box = Math.trunc(row / Dp) * Dp + Math.trunc(col / Dp);
-        const site = (row % Dp) * Dp + (col % Dp);
-        return new Uint8Array([row, col, box, site]);
-    });
-
-    /** A conversion map (index) => Uint8Array([row, site, key, box, site]). */
-    const i_to_rckbs = list_D3.map((index) => {
-        const key = index % D1;
+class Address {
+    constructor(index) {
+        this.index = index;
+        this.key = index % D1;
         index = Math.trunc(index / D1);
-        const col = index % D1;
-        const row = Math.trunc(index / D1);
-        const box = Math.trunc(row / Dp) * Dp + Math.trunc(col / Dp);
-        const site = (row % Dp) * Dp + (col % Dp);
-        return new Uint8Array([row, col, key, box, site]);
-    });
+        this.row = Math.trunc(index / D1);
+        this.col = index % D1;
+        this.box = Math.trunc(this.row / Dp) * Dp + Math.trunc(this.col / Dp);
+        this.site = (this.row % Dp) * Dp + (this.col % Dp);
+        this.rc = this.row * D1 + this.col;
+        this.rk = this.row * D1 + this.key;
+        this.ck = this.col * D1 + this.key;
+        this.bk = this.box * D1 + this.key;
+        this.textKey = Address.symbolKeys[this.key];
+        this.textRow = Address.symbolRows[this.row];
+        this.textCol = Address.symbolCols[this.col];
+        this.textBox = `box ${this.box + 1}`;
+        this.textRC = this.textRow + this.textCol;
+        this.text = `${this.textKey}@${this.textRC}`;
+    }
 
-    /** A conversion map (box, site) => (index) */
-    const bs_to_g = list_D1.map(box => list_D1.map(site => {
-        const row = Math.trunc(box / Dp) * Dp + Math.trunc(site / Dp);
-        const col = (box % Dp) * Dp + (site % Dp);
-        return (row * D1 + col);
-    }));
+    toString() {
+        return this.text;
+    }
 
-    /** the namespace */
-    return {
-        LD1: list_D1,
-        LD2: list_D2,
-        LD3: list_D3,
-        I2RCKBS: i_to_rckbs,
-        G2RCBS: g_to_rcbs,
-        BS2G: bs_to_g
-    };
-})();
+    static symbolKeys = '123456789';
+    static symbolRows = 'ABCDEFGHJ';
+    static symbolCols = '123456789';
+
+    static D1List = Array.from({ length: D1 }).map((_, i) => i);
+    static D2List = Array.from({ length: D2 }).map((_, i) => i);
+    static D3List = Array.from({ length: D3 }).map((_, i) => i);
+
+    /** Precomputed addresses. Must use these ones when referring to a position! */
+    static addresses = Address.D3List.map(index => new Address(index));
+}
 
 
 /** Creates an instance of puzzle. */
@@ -86,239 +69,38 @@ class Puzzle {
     }
 
     /**
-     * Return the state at position (grid, key).
-     * @param {number} grid The grid position.
-     * @param {number} key The pencilmark.
-     * @returns {State} state at the given position.
+     * Read the state of the vertex.
+     * @param {Address} addr The position of the vertex to read. 
      */
-    getStateAtGK(grid, key) {
-        return this.buffer[Puzzle.GK2I(grid, key)];
+    readAt(addr) {
+        return this.buffer[addr.index];
     }
 
     /**
-     * Assign the state to position (grid, key).
-     * @param {number} grid The grid position.
-     * @param {number} key The pencilmark.
-     * @param {State} state The state to be asigned.
+     * Set the state of the vertex as marked.
+     * @param {Address} addr The position of the vertex to mark. 
      */
-    setStateAtGK(grid, key, state) {
-        this.buffer[Puzzle.GK2I(grid, key)] = state;
+    markAt(addr) {
+        this.buffer[addr.index] = State.OCCUPIED;
     }
 
     /**
-     * Return the state at position (row, col, key).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @param {number} key The pencilmark.
-     * @returns {State} state at the given position.
+     * Set the state of the vertex as unmarked.
+     * @param {Address} addr The position of the vertex to unmark. 
      */
-    getStateAtRCK(row, col, key) {
-        return this.buffer[Puzzle.RCK2I(row, col, key)];
+    unmarkAt(addr) {
+        this.buffer[addr.index] = State.VACANT;
     }
 
     /**
-     * Assign the state to position (row, col, key).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @param {number} key The pencilmark.
-     * @param {State} state The state to be assigned.
-     */
-    setStateAtRCK(row, col, key, state) {
-        this.buffer[Puzzle.RCK2I(row, col, key)] = state;
-    }
-
-    /**
-     * Return the state at position (box, site, key).
-     * @param {number} box The box.
-     * @param {number} site The site within the box.
-     * @param {number} key The pencilmark.
-     * @returns {State} state at the given position.
-     */
-    getStateAtBSK(box, site, key) {
-        return this.buffer[Puzzle.BSK2I(box, site, key)];
-    }
-
-    /**
-     * Assign the state to position (box, site, key).
-     * @param {number} box The box.
-     * @param {number} site The site within the box.
-     * @param {number} key The pencilmark.
-     * @param {State} state The state to be assigned.
-     */
-    setStateAtBSK(box, site, key, state) {
-        this.buffer[Puzzle.BSK2I(box, site, key)] = state;
-    }
-
-    /**
-     * Occupy the state at position (grid, key).
-     * @param {number} grid The grid position.
-     * @param {number} key The pencilmark.
-     */
-    markAtGK(grid, key) {
-        this.setStateAtGK(grid, key, State.OCCUPIED);
-    }
-
-    /**
-     * Vacate the state at position (grid, key).
-     * @param {number} grid The grid position.
-     * @param {number} key The pencilmark.
-     */
-    unmarkAtGK(grid, key) {
-        this.setStateAtGK(grid, key, State.VACANT);
-    }
-
-    /**
-     * Occupy the state at position (row, col, key).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @param {number} key The pencilmark.
-     */
-    markAtRCK(row, col, key) {
-        this.setStateAtRCK(row, col, key, State.OCCUPIED);
-    }
-
-    /**
-     * Vacate the state at position (row, col, key).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @param {number} key The pencilmark.
-     */
-    unmarkAtRCK(row, col, key) {
-        this.setStateAtRCK(row, col, key, State.VACANT);
-    }
-
-    /**
-     * Occupy the state at position (box, site, key).
-     * @param {number} box The box.
-     * @param {number} site The site within the box.
-     * @param {number} key The pencilmark.
-     */
-    markAtBSK(box, site, key) {
-        this.setStateAtBSK(box, site, key, State.OCCUPIED);
-    }
-
-    /**
-     * Vacate the state at position (box, site, key).
-     * @param {number} box The box.
-     * @param {number} site The site within the box.
-     * @param {number} key The pencilmark.
-     */
-    unmarkAtBSK(box, site, key) {
-        this.setStateAtBSK(box, site, key, State.VACANT);
-    }
-
-    /**
-     * Create a copy of a puzzle.
-     * @param {Puzzle} source The source puzzle.
-     * @returns {Puzzle} A copy of the source.
+     * Copy the current puzzle.
+     * @param {Puzzle} source The source puzzle to copy.
+     * @returns {Puzzle} The copy of the source.
      */
     static copy(source) {
-        const target = new Puzzle();
-        target.buffer.set(source.buffer);
-        return target;
-    }
-
-    /**
-     * Convert a digit pair to a single number.
-     * @param {number} a1 1st digit.
-     * @param {number} a0 0th digit.
-     * @returns Returns the number.
-     */
-    static D1PairToNumber(a1, a0) {
-        return a1 * D1 + a0;
-    }
-
-    /**
-     * Convert a digit triple to a single number.
-     * @param {number} a2 2nd digit.
-     * @param {number} a1 1st digit.
-     * @param {number} a0 0th digit.
-     * @returns Returns the number.
-     */
-    static D1TripleToNumber(a2, a1, a0) {
-        return a2 * D2 + a1 * D1 + a0;
-    }
-
-    /**
-     * Convert a number to a pair of digits.
-     * @param {number} num The input, typically interpreted as a subindex. 
-     * @returns A pair of digits in D1-adic expansion.
-     */
-    static numberToD1Pair(num) {
-        return [Math.trunc(num / D1), num % D1];
-    }
-
-    /**
-     * Convert a number to a triple of digits.
-     * @param {number} num The input, typically interpreted as a subindex. 
-     * @returns A triple of digits in D1-adic expansion.
-     */
-    static numberToD1Triple(num) {
-        return [Math.trunc(num / D2), Math.trunc(num / D1) % D1, num % D1];
-    }
-
-    /**
-     * Computes the index using position (grid, key).
-     * @param {number} grid The grid-based position.
-     * @param {number} key The pencilmark.
-     * @returns {number} The computed index.
-     */
-    static GK2I = Puzzle.D1PairToNumber;
-
-    /**
-     * Computes the grid using position (row, col).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @returns {number} The computed grid.
-     */
-    static RC2G = Puzzle.D1PairToNumber;
-
-    /**
-     * Computes the index using position (row, col, key).
-     * @param {number} row The row.
-     * @param {number} col The column.
-     * @param {number} key The pencilmark.
-     * @returns {number} Returns the computed index.
-     */
-    static RCK2I = Puzzle.D1TripleToNumber;
-
-    /**
-     * Computes the grid subindex using position (box, site).
-     * @param {number} box Index of the box.
-     * @param {number} site Index of the site.
-     * @returns {number} Returns the computed index.
-     */
-    static BS2G(box, site) {
-        return Constants.BS2G[box][site];
-    }
-
-    /**
-     * Computes the index using position (box, site, key).
-     * @param {number} box Index of the box.
-     * @param {number} site Index of the site.
-     * @param {number} key The pencilmark.
-     * @returns {number} Returns the computed index.
-     */
-    static BSK2I(box, site, key) {
-        return Constants.BS2G[box][site] * D1 + key;
-    }
-
-    /**
-     * Computes the position using index.
-     * @param {number} index The index.
-     * @returns {Uint8Array[]} Returns the position in the form of [row, site, key, box, site].
-     */
-    static I2RCKBS(index) {
-        return Constants.I2RCKBS[index];
-    }
-
-    /**
-     * Computes the position using index.
-     * @param {number} grid The grid position.
-     * @returns {Uint8Array[]} Returns the position in the form of [row, site, key, box, site].
-     */
-    static G2RCBS(grid) {
-        return Constants.G2RCBS[grid];
+        const o = new Puzzle();
+        o.buffer.set(source.buffer);
+        return o;
     }
 
     /**
@@ -343,11 +125,11 @@ class Puzzle {
         if (format == 'simple') {
             Array.from(str).forEach((c, grid) => {
                 if ('1' <= c && c <= '9') {
-                    puzzle.markAtGK(grid, parseInt(c) - 1);
+                    puzzle.markAt(Address.addresses[grid * D1 + parseInt(c) - 1]);
                 }
                 else {
-                    Constants.LD1.forEach(key => {
-                        puzzle.markAtGK(grid, key);
+                    Address.D1List.forEach(key => {
+                        puzzle.markAt(Address.addresses[grid * D1 + key]);
                     });
                 }
             });
@@ -366,36 +148,106 @@ class Puzzle {
      */
     static exportToString(source, format) {
     }
+
+    /**
+     * Compute the connectivity information of the given puzzle.
+     * @param {Puzzle} source An input message containing the source puzzle.
+     * @return {PuzzleConnectivity} The computed connectivity information of the source.
+     */
+    static computeConnectivity(source) {
+        /** The output message. */
+        const output = new PuzzleConnectivity();
+
+        /** Loop for computing the connectivity. */
+        Address.addresses.map(addr => {
+            if (source.readAt(addr) == State.OCCUPIED) {
+                output.rc[addr.rc].push(addr);
+                output.rk[addr.rk].push(addr);
+                output.ck[addr.ck].push(addr);
+                output.bk[addr.bk].push(addr);
+            }
+        });
+
+        return output;
+    }
 }
 
 
 /**
- * Message protocol between strategies.
- * This is purely for ensuring the validity of the input/output.
+ * A container for computed connectivity information.
  */
-class PuzzleMessage {
+class PuzzleConnectivity {
+    constructor() {
+        /** 
+         * 2D array of addresses for occupied vertices in RC logical units.
+         * @type {Address[][]}
+         */
+        this.rc = Address.D2List.map(_ => []);
+        /** 
+         * 2D array of addresses for occupied vertices in RN logical units.
+         * @type {Address[][]}
+         */
+        this.rk = Address.D2List.map(_ => []);
+        /** 
+         * 2D array of addresses for occupied vertices in RN logical units.
+         * @type {Address[][]}
+         */
+        this.ck = Address.D2List.map(_ => []);
+        /** 
+         * 2D array of addresses for occupied vertices in RN logical units.
+         * @type {Address[][]}
+         */
+        this.bk = Address.D2List.map(_ => []);
+    }
+}
+
+
+/**
+ * Message protocol for exchanging data between strategies.
+ */
+class StrategyMessage {
     constructor(obj) {
-        /** @type {Puzzle} The current puzzle. */
-        this.puzzle = null;
         /** @type {string} The type of the message. */
         this.type = 'none';
+
+        /** @type {Puzzle} The current puzzle. */
+        this.puzzle = null;
+
+        /** @type {PuzzleConnectivity} The current connectivity of the puzzle. */
+        this.conn = null;
+
+        /** @type {boolean} Indicates whether the current puzzle is updated or not. */
+        this.isUpdated = false;
+
+        /** @type {object} Messages, grouped by the address of the affected position. */
+        this.groupedMsgs = {};
+
         /** Copy properties of obj to this. */
         Object.assign(this, obj);
 
         return this;
     }
-}
 
-
-class PuzzleEventUpdate {
-    constructor(strategy = 'none') {
-        this.strategy = strategy;
-        this.updates = {};
+    /**
+     * Returns the connectivity of the current puzzle. Ensures that this property is computed.
+     * @returns {PuzzleConnectivity} The connectivity information.
+     */
+    getConnectivity() {
+        if (this.conn == null && this.puzzle != null) {
+            this.conn = Puzzle.computeConnectivity(this.puzzle);
+        }
+        return this.conn;
     }
 
-    addUpdateInstance(index, obj) {
-        this.updates[index] = this.updates[index] ?? [];
-        this.updates[index].push(obj);
+    /**
+     * Add the message to its update logs, grouped by the address of the affected position.
+     * @param {Address} addr The address of the unmarked state.
+     * @param {object} obj The 
+     */
+    addMessage(addr, obj) {
+        const key = addr.toString();
+        this.groupedMsgs[key] = this.groupedMsgs[key] ?? [];
+        this.groupedMsgs[key].push(obj);
     }
 }
 
@@ -405,54 +257,31 @@ class PuzzleEventUpdate {
  */
 class Strategies {
     /**
-     * 
-     * @param {PuzzleMessage} msg_input An input message containing the source puzzle.
-     * @returns {PuzzleMessage} Returns the output message with connectivity included.
+     * Parse the signature into a list of property keys.
+     * @param {string} signature The signature to be parsed. (It should be of the form {rc|rk|ck|bk} => {rc|rk|ck|bk})
+     * @returns {object | null} An object that allows to loop through the parsed signature.
      */
-    static computeConnectivity(msg_input) {
-        /** The source puzzle. */
-        const source = msg_input.puzzle;
-        /** The output message. */
-        const msg_output = new PuzzleMessage({
-            /** Return the source puzzle. */
-            puzzle: source,
-            /** @todo Consider chaning this to an enum type. */
-            type: 'connectivity',
-            /** 2D array of key indices for occupied vertices in RC logical units. */
-            K_in_RC: Array.from({ length: D2 }).map(_ => []),
-            /** 2D array of column indices for occupied vertices in RN logical units. */
-            C_in_RK: Array.from({ length: D2 }).map(_ => []),
-            /** 2D array of row indices for occupied vertices in RN logical units. */
-            R_in_CK: Array.from({ length: D2 }).map(_ => []),
-            /** 2D array of site indices for occupied vertices in RN logical units. */
-            S_in_BK: Array.from({ length: D2 }).map(_ => []),
-            /** @todo Consider collecting all bivalue units. */
-        });
-
-        /** Loop for computing the connectivity. */
-        for (let i = 0; i < D1; i++) {
-            for (let j = 0; j < D1; j++) {
-                /** A flattened 2D subindex. */
-                const subindex = Puzzle.D1PairToNumber(i, j);
-                /** Compute the connectivity information of the source puzzle.  */
-                for (let k = 0; k < D1; k++) {
-                    if (source.getStateAtRCK(i, j, k) == State.OCCUPIED) {
-                        msg_output.K_in_RC[subindex].push(k);
-                    }
-                    if (source.getStateAtRCK(i, k, j) == State.OCCUPIED) {
-                        msg_output.C_in_RK[subindex].push(k);
-                    }
-                    if (source.getStateAtRCK(k, i, j) == State.OCCUPIED) {
-                        msg_output.R_in_CK[subindex].push(k);
-                    }
-                    if (source.getStateAtBSK(i, k, j) == State.OCCUPIED) {
-                        msg_output.S_in_BK[subindex].push(k);
-                    }
+    static parseSignature(signature) {
+        const parsed = signature
+            .toLocaleLowerCase()
+            .replace(/\s+/g, '')
+            .match(/s\{([\w|]+)\}=>w\{([\w|]+)\}/);
+        if (parsed) {
+            return {
+                strong: parsed[1].split('|'),
+                weak: parsed[2].split('|'),
+                loop(callback) {
+                    this.strong.forEach(
+                        type_s => this.weak.forEach(
+                            type_w => callback(type_s, type_w)
+                        )
+                    );
                 }
-            }
+            };
         }
-
-        return msg_output;
+        else {
+            throw RangeError(`'${signature}' is an invalid signature.`);
+        }
     }
 
     /** @todo Implement this! */
@@ -466,219 +295,87 @@ class Strategies {
     }
 
     /**
-     * Apply the naked single strategy.
-     * @param {PuzzleMessage} msg_input An input message containing the source puzzle and its computed connectivity.
-     * @returns {PuzzleMessage} Returns the output message.
+     * Implements the order 1, rank 0 locking strategy.
+     * @param {PuzzleConnectivity} conn The connectivity information.
+     * @param {string} type_s The type of the strong logical unit.
+     * @param {string} type_w The type of the weak logical unit.
+     * @param {function} callback The callback function invoked each time a position is unmarked.
      */
-    static nakedSingle(msg_input) {
-        /** Compute the connectivity if not done already. */
-        if (msg_input?.type != 'connectivity') {
-            msg_input = this.computeConnectivity(msg_input);
-        }
-
-        /** The source puzzle. */
-        const source = msg_input.puzzle;
-        /** The output message. */
-        const msg_output = new PuzzleMessage({
-            puzzle: Puzzle.copy(source),
-            messages: PuzzleEventUpdate('naked single'),
-            isUpdated: false
-        });
-
-        /** Discover using cells. */
-        for (let grid = 0; grid < D2; grid++) {
-            /** The current logical unit. */
-            const cur_lu = msg_input.K_in_RC[grid];
-            /** If a naked single is found, */
+    static lockingOrder1Rank0(conn, type_s, type_w, callback) {
+        /** Loop through the logical units in search of strong ones. */
+        conn[type_s].forEach(cur_lu => {
+            /** If the current logical unit is strong, */
             if (cur_lu.length == 1) {
-                /** In this loop, subindex <=> (box, key) */
-                const key = cur_lu[0];
-                const [row, col, box, site] = Puzzle.G2RCBS(grid);
-
-                /** Erase all the other marks having the same row and key as the naked single. */
-                msg_input.C_in_RK[Puzzle.D1PairToNumber(row, key)].forEach(col2 => {
-                    if (col == col2) {
-                        /** Ignore when it is the naked single. */
+                const addr_s = cur_lu[0];
+                conn[type_w][addr_s[type_w]].forEach(addr_w => {
+                    if (addr_s.index == addr_w.index) {
+                        return;
                     }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtRCK(row, col2, key);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.RCK2I(row, col2, key),
-                            {
-                                unit: 'row',
-                                index: Puzzle.RCK2I(row, col, key)
-                            }
-                        );
-                    }
-                });
-
-                /** Erase all the other marks having the same column and key as the naked single. */
-                msg_input.R_in_CK[Puzzle.D1PairToNumber(col, key)].forEach(row2 => {
-                    if (row == row2) {
-                        /** Ignore when it is the naked single. */
-                    }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtRCK(row2, col, key);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.RCK2I(row2, col, key),
-                            {
-                                unit: 'col',
-                                index: Puzzle.RCK2I(row, col, key)
-                            }
-                        );
-                    }
-                });
-
-                /** Erase all the other marks having the same box and key as the naked single. */
-                msg_input.S_in_BK[Puzzle.D1PairToNumber(box, key)].forEach(site2 => {
-                    if (site == site2) {
-                        /** Ignore when it is the naked single. */
-                    }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtBSK(box, site2, key);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.BSK2I(box, site2, key),
-                            {
-                                unit: 'box',
-                                index: Puzzle.BSK2I(box, site, key)
-                            }
-                        );
-                    }
+                    callback({
+                        type_strong: type_s,
+                        type_weak: type_w,
+                        addr_strong: addr_s,
+                        addr_weak: addr_w
+                    });
                 });
             }
-        }
+        });
+    }
 
-        return msg_output;
+    /**
+     * Apply the naked single strategy.
+     * @param {StrategyMessage} msg_arg An input message containing the source puzzle and its computed connectivity.
+     * @returns {StrategyMessage} Returns the output message.
+     */
+    static nakedSingle(msg_arg) {
+        const source = msg_arg.puzzle;
+        const conn = msg_arg.getConnectivity();
+        const msg_return = new StrategyMessage({
+            puzzle: Puzzle.copy(source),
+            type: 'naked single'
+        });
+
+        Strategies.parseSignature('S{rc} => W{rk|ck|bk}')
+            .loop((type_s, type_w) => {
+                Strategies.lockingOrder1Rank0(
+                    conn, type_s, type_w,
+                    o => {
+                        msg_return.puzzle.unmarkAt(o.addr_weak);
+                        msg_return.isUpdated = true;
+                        msg_return.addMessage(o.addr_weak, o);
+                    }
+                );
+            });
+
+        return msg_return;
     }
 
     /**
      * Apply the hidden single strategy.
-     * @param {PuzzleMessage} msg_input An input message containing the source puzzle and its computed connectivity.
-     * @returns {PuzzleMessage} Returns the output message.
+     * @param {StrategyMessage} msg_arg An input message containing the source puzzle and its computed connectivity.
+     * @returns {StrategyMessage} Returns the output message.
      */
-    static hiddneSingle(msg_input) {
-        /** Compute the connectivity if not done already. */
-        if (msg_input?.type != 'connectivity') {
-            msg_input = this.computeConnectivity(msg_input);
-        }
-
-        /** The source puzzle. */
-        const source = msg_input.puzzle;
-        /** The output message. */
-        const msg_output = new PuzzleMessage({
+    static hiddneSingle(msg_arg) {
+        const source = msg_arg.puzzle;
+        const conn = msg_arg.getConnectivity();
+        const msg_return = new StrategyMessage({
             puzzle: Puzzle.copy(source),
-            messages: PuzzleEventUpdate('hidden single'),
-            isUpdated: false
+            type: 'hidden single'
         });
 
-        /** Discover using boxes. */
-        for (let subindex = 0; subindex < D2; subindex++) {
-            /** The current logical unit. */
-            const cur_lu = msg_input.S_in_BK[subindex];
-            /** If a hidden single is found, */
-            if (cur_lu.length == 1) {
-                /** In this loop, subindex <=> (box, key) */
-                const key = subindex % D1;
-                const box = Math.trunc(subindex / D1);
-                const site = cur_lu[0];
-                const grid = Puzzle.BS2G(box, site);
-
-                /** Erase all the other marks in the same site as the hidden single. */
-                msg_input.K_in_RC[grid].forEach(key2 => {
-                    if (key == key2) {
-                        /** Ignore when it is the hidden single. */
+        Strategies.parseSignature('S{rk|ck|bk} => W{rc}')
+            .loop((type_s, type_w) => {
+                Strategies.lockingOrder1Rank0(
+                    conn, type_s, type_w,
+                    o => {
+                        msg_return.puzzle.unmarkAt(o.addr_weak);
+                        msg_return.isUpdated = true;
+                        msg_return.addMessage(o.addr_weak, o);
                     }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtGK(grid, key2);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2),
-                            {
-                                unit: 'box',
-                                index: Puzzle.GK2I(grid, key2)
-                            }
-                        );
-                    }
-                });
-            }
-        }
+                );
+            });
 
-        /** Discover using rows. */
-        for (let subindex = 0; subindex < D2; subindex++) {
-            /** The current logical unit. */
-            const cur_lu = msg_input.C_in_RK[subindex];
-            /** If a hidden single is found, */
-            if (cur_lu.length == 1) {
-                /** In this loop, subindex <=> (row, key) */
-                const key = subindex % D1;
-                const grid = Puzzle.RC2G(Math.trunc(subindex / D1), cur_lu[0]);
-
-                /** Erase all the other marks in the same site as the hidden single. */
-                msg_input.K_in_RC[grid].forEach(key2 => {
-                    if (key == key2) {
-                        /** Ignore when it is the hidden single. */
-                    }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtGK(grid, key2);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2),
-                            {
-                                unit: 'row',
-                                index: Puzzle.GK2I(grid, key2)
-                            }
-                        );
-                    }
-                });
-            }
-        }
-
-        /** Discover using columns. */
-        for (let subindex = 0; subindex < D2; subindex++) {
-            /** The current logical unit. */
-            const cur_lu = msg_input.R_in_CK[subindex];
-            /** If a hidden single is found, */
-            if (cur_lu.length == 1) {
-                /** In this loop, subindex <=> (col, key) */
-                const key = subindex % D1;
-                const grid = Puzzle.RC2G(cur_lu[0], Math.trunc(subindex / D1));
-
-                /** Erase all the other marks in the same site as the hidden single. */
-                msg_input.K_in_RC[grid].forEach(key2 => {
-                    if (key == key2) {
-                        /** Ignore when it is the hidden single. */
-                    }
-                    else {
-                        /** Remove the mark from the output puzzle. */
-                        msg_output.puzzle.unmarkAtGK(grid, key2);
-                        /** Update the flag 'isUpdated' and evidences. */
-                        msg_output.isUpdated = true;
-                        msg_output.messages.add(
-                            Puzzle.GK2I(grid, key2),
-                            {
-                                unit: 'col',
-                                index: Puzzle.GK2I(grid, key2)
-                            }
-                        );
-                    }
-                });
-            }
-        }
-
-        return msg_output;
+        return msg_return;
     }
 };
 
