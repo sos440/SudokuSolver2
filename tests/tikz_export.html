@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>TikZ Export</title>
+    <script src="tikz_export.js"></script>
+</head>
+
+<body>
+</body>
+
+<script type="text/javascript">
+    const pg = new PuzzleGraphics();
+    pg.style['box-border-width'] = 4;
+    const cs = pg.computeStyle();
+
+    const textbox = document.createElement('pre');
+    const r = 0.025;
+    const maprow = Array.from('ABCDEFGHJ');
+    const mapcol = Array.from('123456789');
+
+    textbox.innerHTML += `\\fill[bgstyle] (0, 0) rectangle (${r * cs['image-width']}, ${-r * cs['image-height']});\n`;
+    for (let row = 0; row < 9; row++){
+        for (let col = 0; col < 9; col++){
+            const pos = PuzzleGraphics.pos_cell(row, col, cs);
+            textbox.innerHTML += `\\fill[cellstyle] (${r * pos[0]}, ${-r * pos[1]}) rectangle +(${r * cs['cell-size']}, ${-r * cs['cell-size']});\n`;
+        }
+    }
+    for (let row = 0; row < 9; row++){
+        for (let col = 0; col < 9; col++){
+            const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
+            textbox.innerHTML += `\\node[celltextstyle] at (${r * pos_t[0]}, ${-r * pos_t[1]}) {${maprow[row]}${mapcol[col]}};\n`;
+        }
+    }
+
+    document.body.appendChild(textbox);
+</script>
+
+</html>

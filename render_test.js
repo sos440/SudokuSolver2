@@ -6,22 +6,97 @@ class PuzzleGraphics {
     }
 
     /**
-     * 
-     * @param {Puzzle} source  
+     * compute the position of the cell region.
+     * @param {number} row The row.
+     * @param {number} col The column.
+     * @param {object} cs The object containing computed styles.
+     * @returns {number[]} The computed [x, y] position.
      */
-    renderSVG(source) {
-        /** Computed styles. */
+    static pos_cell(row, col, cs) {
+        const coord = [col, row];
+        const n_box_seps = coord.map(v => Math.floor(v / Dp));
+        const n_cell_seps = coord.map((v, i) => v - n_box_seps[i]);
+        return coord.map((v, i) => cs['grid-border-width']
+            + v * cs['cell-size']
+            + n_cell_seps[i] * cs['cell-border-width']
+            + n_box_seps[i] * cs['box-border-width']
+        );
+    }
+
+    /**
+     * compute the position of the cell text.
+     * @param {number} row The row.
+     * @param {number} col The column.
+     * @param {object} cs The object containing computed styles.
+     * @returns {number[]} The computed [x, y] position.
+     */
+    static pos_cell_text(row, col, cs) {
+        return PuzzleGraphics.pos_cell(row, col, cs).map(v => v + 0.5 * cs['cell-size']);
+    }
+
+    /**
+     * compute the position of the pencilmark region.
+     * @param {number} row The row.
+     * @param {number} col The column.
+     * @param {number} key The key.
+     * @param {object} cs The object containing computed styles.
+     * @returns {number[]} The computed [x, y] position.
+     */
+    static pos_mark(row, col, key, cs) {
+        const pos = PuzzleGraphics.pos_cell(row, col, cs);
+        const coord = [key % Dp, Math.trunc(key / Dp)];
+        return pos.map((v, i) => v + coord[i] * (cs['mark-size'] + cs['mark-border-width']));
+    }
+
+    /**
+     * compute the position of the pencilmark text.
+     * @param {number} row The row.
+     * @param {number} col The column.
+     * @param {number} key The key.
+     * @param {object} cs The object containing computed styles.
+     * @returns {number[]} The computed [x, y] position.
+     */
+    static pos_mark_text(row, col, key, cs) {
+        return PuzzleGraphics.pos_mark(row, col, key, cs).map(v => v + 0.5 * cs['mark-size']);
+    }
+
+    computeStyle() {
         let cs = Object.assign({}, this.style);
         cs['cell-size'] = 3 * cs['mark-size'] + 2 * cs['mark-border-width'];
         cs['box-size'] = 3 * cs['cell-size'] + 2 * cs['cell-border-width'];
-        cs['grid-size'] = 3 * cs['box-size'] + 2 * cs['box-border-width'];
-        cs['image-size'] = cs['grid-size'] + 2 * cs['grid-border-width'];
+
+        const num_col_box_seps = Math.ceil(cs['columns'] / Dp) - 1;
+        const num_col_cell_seps = cs['columns'] - 1 - num_col_box_seps;
+        cs['grid-width'] = cs['columns'] * cs['cell-size']
+            + num_col_cell_seps * cs['cell-border-width']
+            + num_col_box_seps * cs['box-border-width'];
+        cs['image-width'] = cs['grid-width'] + 2 * cs['grid-border-width'];
+
+        const num_row_box_seps = Math.ceil(cs['rows'] / Dp) - 1;
+        const num_row_cell_seps = cs['rows'] - 1 - num_row_box_seps;
+        cs['grid-height'] = cs['rows'] * cs['cell-size']
+            + num_row_cell_seps * cs['cell-border-width']
+            + num_row_box_seps * cs['box-border-width'];
+        cs['image-height'] = cs['grid-height'] + 2 * cs['grid-border-width'];
+
+        return cs;
+    }
+
+    /** 
+     * Render the puzzle as SVG.
+     * @todo This is only a temporary feature.
+     * @param {Puzzle} source The puzzle to render.
+     * @returns {SVG.Svg} A SVG wrapper representing the rendered puzzle.
+     */
+    renderSVG(source) {
+        /** Computed styles. */
+        const cs = this.computeStyle();
 
         /** Rendered SVG wrapper. */
-        let draw = SVG().size(cs['image-size'], cs['image-size']);
+        const draw = SVG().size(cs['image-width'], cs['image-height']);
 
         /** Render the background. */
-        draw.rect(cs['image-size'], cs['image-size']).attr({
+        draw.rect(cs['image-width'], cs['image-height']).attr({
             fill: 'black'
         });
 
@@ -29,62 +104,37 @@ class PuzzleGraphics {
         const conn = PuzzleConnectivity.compute(source);
         conn.rc.forEach((cur_lu, grid) => {
             /* Draw the cell face. */
-            const param_pos = [Math.trunc(grid / D1), grid % D1];
-            const pos_box = param_pos.map(v => cs['grid-border-width'] + Math.trunc(v / Dp) * (Dp * cs['cell-size'] + (Dp - 1) * cs['cell-border-width'] + cs['box-border-width']));
-            const pos_cell = param_pos.map((v, i) => pos_box[i] + (v % Dp) * (cs['cell-size'] + cs['cell-border-width']));
-            draw.rect(cs['cell-size'], cs['cell-size']).attr({
-                fill: 'white',
-                x: pos_cell[1], /** Note that rows are juxtaposed vertically. */
-                y: pos_cell[0], /** Note that columns are juxtaposed horizontally. */
-                rx: 3,
-                ry: 3
-            });
+            const row = Math.trunc(grid / D1);
+            const col = grid % D1;
+            const pos = PuzzleGraphics.pos_cell(row, col, cs);
+            draw.rect(cs['cell-size'], cs['cell-size'])
+                .attr({ x: pos[0], y: pos[1], rx: 3, ry: 3, fill: 'white' });
 
             if (cur_lu.length == D1) {
                 /** If no pencilmarks are vacant, render nothing. */
             }
             else if (cur_lu.length == 1) {
-                /** 
-                 * If there is a unique pencilmark in the cell, make it a determined value.
-                 * @todo This is only a temporary feature.
-                 * Later, improving each unique pencilmark to a determined value will become 
-                 * part of solving strategy.
-                 */
-                const pos_value = pos_cell.map(v => v + 1.5 * cs['mark-size'] + cs['mark-border-width']);
-                draw.text(cs['mark-symbols'].charAt(cur_lu[0].key)).font(cs['cell-font']).attr({
-                    'text-anchor': 'middle',
-                    'dominant-baseline': 'middle',
-                    x: pos_value[1],
-                    y: pos_value[0]
-                });
+                /** If there is a unique pencilmark, draw it big. */
+                const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
+                draw.text(cs['mark-symbols'].charAt(cur_lu[0].key))
+                    .font(cs['cell-font'])
+                    .attr({ x: pos_t[0], y: pos_t[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
             }
             else if (cur_lu.length == 0) {
-                /** 
-                 * If there are no pencilmarks in the cell, draw an X mark.
-                 * @todo This is only a temporary feature.
-                 */
-                const pos_value = pos_cell.map(v => v + 1.5 * cs['mark-size'] + cs['mark-border-width']);
-                draw.text('X').font(cs['cell-font:invalid']).attr({
-                    'text-anchor': 'middle',
-                    'dominant-baseline': 'middle',
-                    x: pos_value[1],
-                    y: pos_value[0]
-                });
+                /** If there are no pencilmarks, draw an X. */
+                const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
+                draw.text('X')
+                    .font(cs['cell-font:invalid'])
+                    .attr({ x: pos_t[0], y: pos_t[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
             }
             else {
-                /**
-                 * If there are multiple (but not a whole set of) pencilmarks, draw them.
-                 */
+                /** If there are multiple (but not a whole set of) pencilmarks, draw them. */
                 cur_lu.forEach(addr => {
                     const key = addr.key;
-                    const param_pos2 = [Math.trunc(key / Dp), key % Dp];
-                    const pos_mark = param_pos2.map((v, i) => pos_cell[i] + 0.5 * cs['mark-size'] + v * (cs['mark-size'] + cs['mark-border-width']));
-                    draw.text(cs['mark-symbols'].charAt(key)).font(cs['mark-font']).attr({
-                        'text-anchor': 'middle',
-                        'dominant-baseline': 'middle',
-                        x: pos_mark[1],
-                        y: pos_mark[0]
-                    });
+                    const pos_mt = PuzzleGraphics.pos_mark_text(row, col, key, cs);
+                    draw.text(cs['mark-symbols'].charAt(key))
+                        .font(cs['mark-font'])
+                        .attr({ x: pos_mt[0], y: pos_mt[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
                 });
             }
         });
@@ -92,6 +142,8 @@ class PuzzleGraphics {
     }
 
     static style = {
+        'rows': D1,
+        'columns': D1,
         'mark-font': {
             family: 'Helvetica',
             size: 9,
@@ -108,12 +160,12 @@ class PuzzleGraphics {
             fill: "red",
             weight: "bold"
         },
+        'mark-symbols': '123456789',
         'mark-size': 14,
         'mark-border-width': 1,
         'cell-border-width': 1,
         'box-border-width': 2,
         'grid-border-width': 4,
-        'mark-symbols': '123456789'
     };
 }
 
@@ -194,7 +246,7 @@ SVG.on(document, 'DOMContentLoaded', function () {
             return arr_history[cur_page];
         })();
 
-        if (msg.isUpdated){
+        if (msg.isUpdated) {
             gp_render_puzzle(msg);
         }
         gp_render_msg(msg);
