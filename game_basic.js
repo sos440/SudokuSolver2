@@ -1,10 +1,10 @@
-/** @type {number} Dimensional parameter on which all the other dimensional constants depend. */
+/** @type {number} Dimensional parameter on which all the others depend. */
 const Dp = 3;
 /** @type {number} Number of rows/columns/boxes. */
 const D1 = Dp ** 2;
-/** @type {number} Number of sites. */
+/** @type {number} Number of cells. */
 const D2 = D1 ** 2;
-/** @type {number} Number of vertices. */
+/** @type {number} Number of candidates. */
 const D3 = D1 ** 3;
 
 
@@ -12,10 +12,10 @@ const D3 = D1 ** 3;
  * @readonly
  */
 const State = {
-    /** The vertex is vacant, i.e., it is marked with a pencilmark. */
-    VACANT: 0,
-    /** The vertex is occupied, i.e., it is unmarked. */
-    OCCUPIED: 1
+    /** The candidate does not exist. */
+    REMOVED: 0,
+    /** The candidate exists. */
+    MARKED: 1
 };
 
 
@@ -47,16 +47,16 @@ class Address {
         return this.text;
     }
 
-    static symbolKeys = '123456789';
-    static symbolRows = 'ABCDEFGHJ';
-    static symbolCols = '123456789';
+    static symbolKeys = Array.from('123456789');
+    static symbolRows = Array.from('ABCDEFGHJ');
+    static symbolCols = Array.from('123456789');
 
     static D1List = Array.from({ length: D1 }).map((_, i) => i);
     static D2List = Array.from({ length: D2 }).map((_, i) => i);
     static D3List = Array.from({ length: D3 }).map((_, i) => i);
 
-    /** Precomputed addresses. Must use these ones when referring to a position! */
-    static ad = Address.D3List.map(index => new Address(index));
+    /** List of precomputed addresses. */
+    static ad = Address.D3List.map((index) => new Address(index));
 }
 
 
@@ -64,32 +64,40 @@ class Address {
 class Puzzle {
     /** Constructor */
     constructor() {
-        /** An array storing states as a 1D list. */
-        this.buffer = new Uint8Array(D3);
+        /** @type {Uint8Array[]} A flattened array representing the pencilmark grid. */
+        this.data = new Uint8Array(D3);
     }
 
     /**
-     * Read the state of the vertex.
-     * @param {Address} addr The position of the vertex to read. 
+     * Read the state of the candidate at the given position.
+     * @param {Address} addr The position of the candidate to read.
      */
     readAt(addr) {
-        return this.buffer[addr.index];
+        return this.data[addr.index];
     }
 
     /**
-     * Set the state of the vertex as marked.
-     * @param {Address} addr The position of the vertex to mark. 
+     * Check if the candiate exists at the given position.
+     * @param {Address} addr The position of the candidate to check.
+     */
+    isMarkedAt(addr) {
+        return (this.data[addr.index] == State.MARKED);
+    }
+
+    /**
+     * Mark the state at the given position.
+     * @param {Address} addr The position of the candidate to mark. 
      */
     markAt(addr) {
-        this.buffer[addr.index] = State.OCCUPIED;
+        this.data[addr.index] = State.MARKED;
     }
 
     /**
-     * Set the state of the vertex as unmarked.
-     * @param {Address} addr The position of the vertex to unmark. 
+     * Remove the state at the given position.
+     * @param {Address} addr The position of the candidate to unmark. 
      */
-    unmarkAt(addr) {
-        this.buffer[addr.index] = State.VACANT;
+    removeAt(addr) {
+        this.data[addr.index] = State.REMOVED;
     }
 
     /**
@@ -99,20 +107,58 @@ class Puzzle {
      */
     static copy(source) {
         const o = new Puzzle();
-        o.buffer.set(source.buffer);
+        o.data.set(source.data);
         return o;
     }
 
+    /** 
+     * Import maps labeled by the format of the input string.
+     * @type {Map<string, (str: string) => (Puzzle)>} 
+     */
+    static importMaps = new Map([
+        ['simple', (str) => {
+            const puzzle = new Puzzle();
+            Array.from(str).forEach((c, grid) => {
+                const index0 = grid * D1;
+                if ('1' <= c && c <= '9') {
+                    puzzle.markAt(Address.ad[index0 + parseInt(c) - 1]);
+                }
+                else {
+                    Address.D1List.forEach((key) => {
+                        puzzle.markAt(Address.ad[index0 + key]);
+                    });
+                }
+            });
+            return puzzle;
+        }],
+        ['base64', (str) => {
+            const puzzle = new Puzzle();
+            Array.from(atob(str.substring(5))).forEach((c, pos) => {
+                let n = c.charCodeAt(0);
+                let index = pos * 8;
+                for (let i = 0; i < 8; i++){
+                    if (index >= D3){
+                        break;
+                    }
+                    if (n & 0x00000001 == 1){
+                        puzzle.markAt(Address.ad[index]);
+                    }
+                    n = n >> 1;
+                    index++;
+                }
+            });
+            return puzzle;
+        }]
+    ]);
+
     /**
      * Load a puzzle from a string.
-     * @param {string} str An input string, either in simple/base64/JSON format.
+     * @param {string} str An input string, either in simple/base64 format.
      * @param {string} [format] The format of the output.
      * @returns {Puzzle} Returns the loaded puzzle.
      * @todo Implement this shit.
      */
     static importFromString(str, format) {
-        const puzzle = new Puzzle();
-
         /** Guess the format of the string. */
         if (typeof format == 'string') {
             /** Do nothing. */
@@ -120,33 +166,77 @@ class Puzzle {
         else if (str.length == D2) {
             format = 'simple';
         }
+        else if (str.substring(0, 5) == 'data:') {
+            format = 'base64';
+        }
 
         /** Parse string */
-        if (format == 'simple') {
-            Array.from(str).forEach((c, grid) => {
-                if ('1' <= c && c <= '9') {
-                    puzzle.markAt(Address.ad[grid * D1 + parseInt(c) - 1]);
+        return Puzzle.importMaps.get(format)(str);
+    }
+
+    /** 
+     * Export maps labeled by the format of the output string.
+     * @type {Map<string, (puzzle: Puzzle) => (string)>} 
+     */
+    static exportMaps = new Map([
+        ['simple', (puzzle) => {
+            const conn = Puzzle.computeConnectivity(puzzle);
+            return conn.rc.map((cur_lu) => {
+                if (cur_lu.length == 1){
+                    return cur_lu[0].textKey;
                 }
                 else {
-                    Address.D1List.forEach(key => {
-                        puzzle.markAt(Address.ad[grid * D1 + key]);
-                    });
+                    return ' ';
                 }
-            });
-            return puzzle;
-        }
-        else {
-            throw new RangeError('Failed to parse the string.');
-        }
+            }).join('');
+        }],
+        ['base64', (puzzle) => {
+            /** Each 8 candidates are compressed to a single number and stored in this array. */
+            const compressed = Array.from({ length: Math.floor(D3 / 8) }).map(
+                (_, pos) => {
+                    /** @type {number} Current character. */
+                    let c = 0;
+                    for (let i = 0; i < 8; i++) {
+                        c |= (puzzle.data[pos * 8 + i] ?? 0) << i;
+                    }
+                    return c;
+                }
+            )
+            /** Return the base64 encoding of "compressed". */
+            return `data:${btoa(String.fromCharCode.apply(null, compressed))}`;
+        }]
+    ]);
+
+    /**
+     * Export the source as a formatted string.
+     * @param {Puzzle} source The source puzzle.
+     * @param {string} format The format of the output.
+     * @returns {string} The output string.
+     */
+    static exportToString(source, format) {
+        return Puzzle.exportMaps.get(format)(source);
     }
 
     /**
-     * Conver the source to a simple string.
-     * @param {Puzzle} source The source puzzle
-     * @param {string} format The format of the output.
-     * @returns {string} The simple string.
+     * Compute the connectivity information of the given puzzle.
+     * @param {Puzzle} source An input message containing the source puzzle.
+     * @return {PuzzleConnectivity} The computed connectivity information of the source.
      */
-    static exportToString(source, format) {
+    static computeConnectivity(source) {
+        /** The output message. */
+        const output = new PuzzleConnectivity();
+
+        /** Loop for computing the connectivity. */
+        for (const addr of Address.ad) {
+            if (source.isMarkedAt(addr)) {
+                output.rc[addr.rc].push(addr);
+                output.rk[addr.rk].push(addr);
+                output.ck[addr.ck].push(addr);
+                output.bk[addr.bk].push(addr);
+            }
+        }
+
+        return output;
     }
 }
 
@@ -176,28 +266,6 @@ class PuzzleConnectivity {
          * @type {Address[][]}
          */
         this.bk = Address.D2List.map(_ => []);
-    }
-
-    /**
-     * Compute the connectivity information of the given puzzle.
-     * @param {Puzzle} source An input message containing the source puzzle.
-     * @return {PuzzleConnectivity} The computed connectivity information of the source.
-     */
-    static compute(source) {
-        /** The output message. */
-        const output = new PuzzleConnectivity();
-
-        /** Loop for computing the connectivity. */
-        for(const addr of Address.ad){
-            if (source.readAt(addr) == State.OCCUPIED) {
-                output.rc[addr.rc].push(addr);
-                output.rk[addr.rk].push(addr);
-                output.ck[addr.ck].push(addr);
-                output.bk[addr.bk].push(addr);
-            }
-        }
-
-        return output;
     }
 }
 
@@ -234,7 +302,7 @@ class StrategyMessage {
      */
     getConnectivity() {
         if (this.conn == null && this.puzzle != null) {
-            this.conn = PuzzleConnectivity.compute(this.puzzle);
+            this.conn = Puzzle.computeConnectivity(this.puzzle);
         }
         return this.conn;
     }
@@ -271,8 +339,8 @@ class Strategies {
                 strong: parsed[1].split('|'),
                 weak: parsed[2].split('|'),
                 loop(callback) {
-                    for (const type_s of this.strong){
-                        for (const type_w of this.weak){
+                    for (const type_s of this.strong) {
+                        for (const type_w of this.weak) {
                             callback(type_s, type_w);
                         }
                     }
@@ -345,7 +413,7 @@ class Strategies {
                 Strategies.lockingOrder1Rank0(
                     conn, type_s, type_w,
                     o => {
-                        msg_return.puzzle.unmarkAt(o.addr_weak);
+                        msg_return.puzzle.removeAt(o.addr_weak);
                         msg_return.isUpdated = true;
                         msg_return.addMessage(o.addr_weak, o);
                     }
@@ -373,7 +441,7 @@ class Strategies {
                 Strategies.lockingOrder1Rank0(
                     conn, type_s, type_w,
                     o => {
-                        msg_return.puzzle.unmarkAt(o.addr_weak);
+                        msg_return.puzzle.removeAt(o.addr_weak);
                         msg_return.isUpdated = true;
                         msg_return.addMessage(o.addr_weak, o);
                     }

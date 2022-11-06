@@ -33,7 +33,7 @@ export const range = function* (a, b) {
  * Encode a Uint8Array to a base64 string.
  * @returns {string} A base64 string.
  */
- Uint8Array.prototype.toBase64 = function () {
+Uint8Array.prototype.toBase64 = function () {
     return btoa(String.fromCharCode(...this));
 };
 
