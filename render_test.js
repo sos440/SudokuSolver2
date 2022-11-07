@@ -2,7 +2,7 @@
 
 class PuzzleGraphics {
     constructor(style = {}) {
-        this.style = Object.assign(style, PuzzleGraphics.style);
+        this.style = Object.assign(Object.assign({}, PuzzleGraphics.style), style);
     }
 
     /**
@@ -131,65 +131,70 @@ class PuzzleGraphics {
         });
 
         /** Render the headers. */
+        const gp_headers = draw.group();
+        gp_headers.font(cs['header-font']).attr({ 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
         Address.D1List.forEach((idx) => {
             const pos_left = PuzzleGraphics.pos_header_left(idx, cs);
-            draw.text(Address.symbolRows[idx])
-                .font(cs['header-font'])
-                .attr({ x: pos_left[0], y: pos_left[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
-
+            gp_headers.text(Address.symbolRows[idx]).attr({ x: pos_left[0], y: pos_left[1] });
             const pos_top = PuzzleGraphics.pos_header_top(idx, cs);
-            draw.text(Address.symbolCols[idx])
-                .font(cs['header-font'])
-                .attr({ x: pos_top[0], y: pos_top[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+            gp_headers.text(Address.symbolCols[idx]).attr({ x: pos_top[0], y: pos_top[1] });
         });
 
         /** Render cells and pencilmarks. */
         const conn = Puzzle.computeConnectivity(source);
+        const gp_cells = draw.group();
+        gp_cells.attr({ fill: 'white' });
+        const gp_singles = draw.group();
+        gp_singles.font(cs['cell-font']).attr({ 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+        const gp_invalid = draw.group();
+        gp_invalid.font(cs['cell-font:invalid']).attr({ 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+        const gp_marks = draw.group();
+        gp_marks.font(cs['mark-font']).attr({ 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+
+        /** Temporary code for the address map style
+        const gp_temp = draw.group();
+        gp_temp.font({
+            family: 'Helvetica',
+            size: 20,
+            fill: "black"
+        }).attr({ 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+         */
+
         conn.rc.forEach((cur_lu, grid) => {
             /* Draw the cell face. */
             const row = Math.trunc(grid / D1);
             const col = grid % D1;
             const pos = PuzzleGraphics.pos_cell(row, col, cs);
-            draw.rect(cs['cell-size'], cs['cell-size'])
-                .attr({ x: pos[0], y: pos[1], rx: 3, ry: 3, fill: 'white' });
+            gp_cells.rect(cs['cell-size'], cs['cell-size']).attr({ x: pos[0], y: pos[1], rx: 3, ry: 3 });
 
             /** Temporary code for rendering the address map
             const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
-            draw.text(Address.ad[grid * D1].textRC)
-                .font({
-                    family: 'Helvetica',
-                    size: 20,
-                    fill: "black"
-                })
-                .attr({ x: pos_t[0], y: pos_t[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+            gp_temp.text(Address.ad[grid * D1].textRC).attr({ x: pos_t[0], y: pos_t[1] });
             return;
-            */
+             */
 
             if (cur_lu.length == D1) {
                 /** If no pencilmarks are vacant, render nothing. */
             }
             else if (cur_lu.length == 1) {
                 /** If there is a unique pencilmark, draw it big. */
-                const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
-                draw.text(Address.symbolKeys[cur_lu[0].key])
-                    .font(cs['cell-font'])
-                    .attr({ x: pos_t[0], y: pos_t[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+                const pos = PuzzleGraphics.pos_cell_text(row, col, cs);
+                const str_text = Address.symbolKeys[cur_lu[0].key];
+                gp_singles.text(str_text).attr({ x: pos[0], y: pos[1] });
             }
             else if (cur_lu.length == 0) {
                 /** If there are no pencilmarks, draw an X. */
-                const pos_t = PuzzleGraphics.pos_cell_text(row, col, cs);
-                draw.text('X')
-                    .font(cs['cell-font:invalid'])
-                    .attr({ x: pos_t[0], y: pos_t[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+                const pos = PuzzleGraphics.pos_cell_text(row, col, cs);
+                const str_text = 'X';
+                gp_invalid.text(str_text).attr({ x: pos[0], y: pos[1] });
             }
             else {
                 /** If there are multiple (but not a whole set of) pencilmarks, draw them. */
                 cur_lu.forEach(addr => {
                     const key = addr.key;
-                    const pos_mt = PuzzleGraphics.pos_mark_text(row, col, key, cs);
-                    draw.text(Address.symbolKeys[key])
-                        .font(cs['mark-font'])
-                        .attr({ x: pos_mt[0], y: pos_mt[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+                    const pos = PuzzleGraphics.pos_mark_text(row, col, key, cs);
+                    const str_text = Address.symbolKeys[key];
+                    gp_marks.text(str_text).attr({ x: pos[0], y: pos[1] });
                 });
             }
         });
@@ -353,7 +358,8 @@ SVG.on(document, 'DOMContentLoaded', function () {
     /** Print dataURL button. */
     document.querySelector('#print_dataurl').addEventListener('click', e => {
         o_log.replaceChildren();
-        navigator.clipboard.writeText(`data:image/svg+xml;base64,${btoa(document.querySelector('svg')?.outerHTML)}`).then(
+        const svg_html = document.querySelector('svg')?.outerHTML.replace(/ svgjs:data=[^ ]+\"/g, '');
+        navigator.clipboard.writeText(`data:image/svg+xml;base64,${btoa(svg_html)}`).then(
             () => {
                 print_line('The dataURL has been successfully copied to clipboard.');
             },
@@ -372,6 +378,43 @@ SVG.on(document, 'DOMContentLoaded', function () {
         print_line('Base64 format:');
         print_line(Puzzle.exportToString(msg.puzzle, 'base64'));
     });
+
+    /** Temporary code for printing out partial grids */
+    (() => {
+        /** Anonymous namespace */
+        const pg = new PuzzleGraphics({
+            'rows': 1,
+            'columns': 1,
+            'grid-border-width': 2,
+            headers: false
+        });
+        const cs = pg.computeStyle();
+
+        /** Rendered SVG wrapper. */
+        const draw = SVG().size(cs['image-width'], cs['image-height']);
+
+        /** Render the background. */
+        draw.rect(cs['image-width'], cs['image-height']).attr({
+            fill: 'black'
+        });
+
+        const row = 0;
+        const col = 0;
+        const pos = PuzzleGraphics.pos_cell(row, col, cs);
+        draw.rect(cs['cell-size'], cs['cell-size'])
+            .attr({ x: pos[0], y: pos[1], rx: 3, ry: 3, fill: 'white' });
+
+        /** If there are multiple (but not a whole set of) pencilmarks, draw them. */
+        [0, 1, 5, 7].map((index) => Address.ad[index]).forEach((addr) => {
+            const key = addr.key;
+            const pos_mt = PuzzleGraphics.pos_mark_text(row, col, key, cs);
+            draw.text(Address.symbolKeys[key])
+                .font(cs['mark-font'])
+                .attr({ x: pos_mt[0], y: pos_mt[1], 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+        });
+
+        draw.addTo('body');
+    })();
 });
 
 

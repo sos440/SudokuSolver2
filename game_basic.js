@@ -136,11 +136,11 @@ class Puzzle {
             Array.from(atob(str.substring(5))).forEach((c, pos) => {
                 let n = c.charCodeAt(0);
                 let index = pos * 8;
-                for (let i = 0; i < 8; i++){
-                    if (index >= D3){
+                for (let i = 0; i < 8; i++) {
+                    if (index >= D3) {
                         break;
                     }
-                    if (n & 0x00000001 == 1){
+                    if (n & 0x00000001 == 1) {
                         puzzle.markAt(Address.ad[index]);
                     }
                     n = n >> 1;
@@ -182,7 +182,7 @@ class Puzzle {
         ['simple', (puzzle) => {
             const conn = Puzzle.computeConnectivity(puzzle);
             return conn.rc.map((cur_lu) => {
-                if (cur_lu.length == 1){
+                if (cur_lu.length == 1) {
                     return cur_lu[0].textKey;
                 }
                 else {
@@ -239,6 +239,11 @@ class Puzzle {
         return output;
     }
 }
+
+
+/**
+ * Multiset class
+ */
 
 
 /**
