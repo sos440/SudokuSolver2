@@ -1,0 +1,25 @@
+{
+    // https://www.typescriptlang.org/docs/handbook/compiler-options.html
+    "compilerOptions": {
+        "target": "es6",
+        "module": "commonjs",
+        "outDir": "./product", // js파일 아웃풋 경로바꾸기
+        "rootDir": "./source", // 루트경로 바꾸기 (js 파일 아웃풋 경로에 영향줌)
+        "removeComments": true,
+        "strict": true, // strict 관련, noimplicit 어쩌구 관련 모드 전부 켜기
+        "noImplicitAny": true, // any타입 금지 여부
+        "strictNullChecks": true, // null, undefined 타입에 이상한 짓 할시 에러내기 
+        "strictFunctionTypes": true, // 함수파라미터 타입체크 강하게 
+        "strictPropertyInitialization": true, //class constructor 작성시 타입체크 강하게
+        "noImplicitThis": true, // this 키워드가 any 타입일 경우 에러내기
+        "alwaysStrict": true, // 자바스크립트 "use strict" 모드 켜기,
+        "skipLibCheck": true, // Skip type checking of declaration files.
+        "types": []
+    },
+    "exclude": [
+      "node_modules",
+      "./node_modules",
+      "./node_modules/*",
+      "./node_modules/@types/node/index.d.ts",
+    ]
+}
