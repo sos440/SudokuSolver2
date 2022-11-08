@@ -1,1 +1,0 @@
-console.log(new String().padEnd(3, '='));

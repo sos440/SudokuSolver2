@@ -1,4 +1,4 @@
 .gitignore
 node_modules
-__archived
-__tests
+.archived
+.tests
