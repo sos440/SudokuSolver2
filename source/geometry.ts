@@ -81,14 +81,14 @@ export class Hypergraph {
         for (const [name, group] of this.edgeGroups.entries()) {
             for (const v of this.vertices.values()) {
                 const v_layers = v.layers;
-                for (const serial_no of v_layers.get(name) || new Set<number>()) {
-                    if (group.has(serial_no)) {
-                        group.get(serial_no)?.add(v);
+                for (const sno of v_layers.get(name) || new Set<number>()) {
+                    if (group.has(sno)) {
+                        group.get(sno)?.add(v);
                     }
                     else {
                         const new_edge = new Multiset<LabeledVertex>();
                         new_edge.add(v);
-                        group.set(serial_no, new_edge);
+                        group.set(sno, new_edge);
                     }
                 }
             }
@@ -139,7 +139,7 @@ type FormatOptions = 'simple' | 'base64' | 'candibox';
 /**
  * Represents vanilla sudoku of size parameter Dp
  */
-export class GameSudokuVanilla extends Hypergraph {
+export class HGSudokuVanilla extends Hypergraph {
     /** The dimensional parameter on which all the others depend. */
     Dp: number;
 
@@ -213,8 +213,8 @@ export class GameSudokuVanilla extends Hypergraph {
         if (format == 'simple') {
             /** Build the list of indices to include. */
             const index_list: number[] = [];
-            for (const [grid, c] of Array.from(input).entries()) {
-                const index0 = grid * this.D1;
+            for (const [grid_sno, c] of Array.from(input).entries()) {
+                const index0 = grid_sno * this.D1;
                 if ('1' <= c && c <= '9') {
                     index_list.push(index0 + parseInt(c) - 1);
                 }
@@ -267,12 +267,10 @@ export class GameSudokuVanilla extends Hypergraph {
         if (format == 'simple') {
             const result: string[] = new Array(this.D2).fill('.');
             const group = source.edgeGroups.get('rc') ?? new Map<number, Multiset<LabeledVertex>>();
-            for (const [grid, edge] of group.entries()) {
+            for (const [grid_sno, edge] of group.entries()) {
                 /** Write a number only when the cell is determined. */
                 if (edge.size == 1) {
-                    result[grid] = String.fromCharCode(
-                        ...Array.from(edge.keys()).map(v => 0x31 + (v.labels.get('key') ?? 0))
-                    );
+                    result[grid_sno] = String.fromCharCode(0x31 + (edge.pick()?.labels.get('key') ?? 0));
                 }
             }
             return result.join('');
