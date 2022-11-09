@@ -3,80 +3,86 @@
  */
 
 
-/**
- * A boolean callback function that iterates through the entries.
- * @callback Callback<K>
- * @param {K} element The current element.
- * @param {number} multi The current count.
- * @param {Multiset<K>} cur_mset The current multiset.
- * @returns {V} The truth value.
- */
-type Callback<K, V> = (element: K, multi: number, cur_mset: Multiset<K>) => V;
+type Callback<K, V> = (element: K, multi?: number, cur_mset?: MSet<K>) => V;
 
 
 /**
  * Represents multisets (with multiplicites taking integer values).
  */
-export class Multiset<K> extends Map<K, number> {
-    constructor(e_list: K[] = []) {
+export class MSet<K> extends Map<K, number> {
+    constructor(e_iter?: IterableIterator<K> | MSet<K> | Set<K> | Array<K>) {
         super();
-        for (const e of e_list) {
-            this.add(e);
+        if (e_iter instanceof MSet<K>){
+            for (const [e, multi] of e_iter) {
+                this.set(e, multi);
+            }
+        }
+        else if (e_iter){
+            for (const e of e_iter) {
+                this.add(e);
+            }
         }
     }
 
     /**
-     * Count the total count.
-     * @returns {number} The sum of all multiplicities.
+     * Counts the sum of multiplicites in the MSet.
      */
     get count(): number {
         return Array.from(this.values()).reduce((s, x) => s + x, 0);
     }
 
     /**
-     * Set the multiplicites (number of occurrences) of the element.
+     * Sets the multiplicity (number of occurrences) of the element in the MSet.
      * This is inherited from Map class.
      * @method set
-     * @param {K} e The element whose multiplicity is to be set.
-     * @param {number} multi The multiplicity
-     * @returns {Multiset<K>} The current multiset.
      */
 
     /**
-     * Remove all the occurrences of the element from the multiset.
+     * Removes all the occurrences of the element from the MSet.
      * This is inherited from Map class.
      * @method delete
-     * @param {K} e The element whose every occurrence is to be removed.
-     * @returns {Multiset<K>} The current multiset.
      */
 
     /**
-     * Add an element to the multiset.
-     * @param {K} e The element to be added.
-     * @returns {Multiset<K>} The current multiset.
+     * Modifies the multiplicity of the element by the specified amount.
      */
-    add(e: K): Multiset<K> {
-        this.set(e, (this.get(e) ?? 0) + 1);
+    modify(e: K, multi_mod: number): MSet<K> {
+        const multi = (this.get(e) ?? 0) + multi_mod;
+        if (multi == 0){
+            this.delete(e);
+        }
+        else {
+            this.set(e, multi);
+        }
         return this;
     }
 
     /**
-     * Remove an element from the multiset.
-     * @param {K} e The element to be removed.
-     * @returns {Multiset<K>} The current multiset.
+     * Adds an occurrence of the element to the MSet.
      */
-    remove(e: K): Multiset<K> {
-        this.set(e, (this.get(e) ?? 0) - 1);
-        return this;
+    add(e: K): MSet<K> {
+        return this.modify(e, 1);
     }
 
     /**
-     * Check if the condition is satisfied by every distinguished elements.
-     * @param {Callback<K, boolean>} callback The test function to evaluate through the elements.
-     * @returns {boolean} True if the test function results in true for every element.
+     * Removes an occurrence of the element from the MSet.
+     */
+    remove(e: K): MSet<K> {
+        return this.modify(e, -1);
+    }
+
+    /**
+     * Returns an iterator over the distinguished elements.
+     */
+    elements(): IterableIterator<K> {
+        return this.keys();
+    }
+
+    /**
+     * @returns {boolean} true if the test results in true for every distinguished element, or false if the test fails for some element.
      */
     every(callback: Callback<K, boolean>): boolean {
-        for (const [e, multi] of this.entries()) {
+        for (const [e, multi] of this) {
             if (!callback(e, multi, this)) {
                 return false;
             }
@@ -85,12 +91,10 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Check if the condition is satisfied by some distinguished element.
-     * @param {Callback<K, boolean>} callback The test function to evaluate through the elements.
-     * @returns {boolean} True if the test function results in true for some element.
+     * @returns {boolean} true if the test results in true for some distinguished element, or false if the test fails for every element.
      */
     some(callback: Callback<K, boolean>): boolean {
-        for (const [e, multi] of this.entries()) {
+        for (const [e, multi] of this) {
             if (callback(e, multi, this)) {
                 return true;
             }
@@ -99,13 +103,11 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Filter all the elements satisfying the condition.
-     * @param {Callback} callback The test function to evaluate through the elements.
-     * @returns {Multiset} The sub-multiset consisting of all element satisfying the test function.
+     * Creates a new MSet consiting of all elements passing the test.
      */
-    filter(callback: Callback<K, boolean>): Multiset<K> {
-        const result = new Multiset<K>();
-        for (const [e, multi] of this.entries()) {
+    filter(callback: Callback<K, boolean>): MSet<K> {
+        const result = new MSet<K>();
+        for (const [e, multi] of this) {
             if (callback(e, multi, this)) {
                 result.set(e, multi);
             }
@@ -114,12 +116,10 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Check if every count is non-negative.
-     * @param {Multiset<K>} cur_mset The callback function to evaluate through the elements.
-     * @returns {boolean} True if the callback is true for every element.
+     * @returns {boolean} true if every element in the MSet has non-negative multiplicity, or false if some element has negative multiplicity.
      */
-    static geqZero<K>(cur_mset: Multiset<K>): boolean {
-        for (const [_, multi] of cur_mset.entries()) {
+    static geqZero<K>(cur_mset: MSet<K>): boolean {
+        for (const [_, multi] of cur_mset) {
             if (multi < 0) {
                 return false;
             }
@@ -128,18 +128,15 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Check if set_a(x) >= set_b(x) for all x.
-     * @param {Multiset<K>} mset_a The multiset to compare.
-     * @param {Multiset<K>} mset_b The multiset to compare.
-     * @returns {boolean} True if set_a(x) >= set_b(x) for all x.
+     * @returns {boolean} true if the multiplicity in the first MSet is greater than or equal to that in the second MSet for every possible element, or false otherwise.
      */
-    static geq<K>(mset_a: Multiset<K>, mset_b: Multiset<K>): boolean {
-        for (const [e_a, multi_a] of mset_a.entries()) {
+    static geq<K>(mset_a: MSet<K>, mset_b: MSet<K>): boolean {
+        for (const [e_a, multi_a] of mset_a) {
             if (multi_a < (mset_b.get(e_a) ?? 0)) {
                 return false;
             }
         }
-        for (const [e_b, multi_b] of mset_b.entries()) {
+        for (const [e_b, multi_b] of mset_b) {
             if (multi_b > (mset_a.get(e_b) ?? 0)) {
                 return false;
             }
@@ -148,19 +145,17 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Add multisets.
-     * @param {...Multiset<K>} summands Multisets to be summed up.
-     * @returns {Multiset<K>} The sum.
+     * @returns {MSet<K>} Sum of all MSets in the argument.
      */
-    static add<K>(...summands: Multiset<K>[]): Multiset<K> {
-        const result = new Multiset<K>();
+    static add<K>(...summands: MSet<K>[]): MSet<K> {
+        const result = new MSet<K>();
         for (const cur_mset of summands) {
-            for (const [e, multi] of cur_mset.entries()) {
+            for (const [e, multi] of cur_mset) {
                 result.set(e, (result.get(e) ?? 0) + multi);
             }
         }
-        /** Eliminiate zero-count elements. */
-        for (const [e, multi] of result.entries()) {
+        /** Eliminiates zero-count elements. */
+        for (const [e, multi] of result) {
             if (multi == 0) {
                 result.delete(e);
             }
@@ -169,21 +164,18 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Subtract a multiset from another.
-     * @param {Multiset<K>} mset_a The multiset to be subtracted from.
-     * @param {Multiset<K>} mset_b The multiset to subtract.
-     * @returns {Multiset<K>} The difference.
+     * @returns {MSet<K>} The first MSet minus the second MSet.
      */
-    static subtract<K>(mset_a: Multiset<K>, mset_b: Multiset<K>): Multiset<K> {
-        const result = new Multiset<K>();
-        for (const [e, multi] of mset_a.entries()) {
+    static subtract<K>(mset_a: MSet<K>, mset_b: MSet<K>): MSet<K> {
+        const result = new MSet<K>();
+        for (const [e, multi] of mset_a) {
             result.set(e, multi);
         }
-        for (const [e, multi] of mset_b.entries()) {
+        for (const [e, multi] of mset_b) {
             result.set(e, (result.get(e) ?? 0) - multi);
         }
         /** Eliminiate zero-count elements. */
-        for (const [e, multi] of result.entries()) {
+        for (const [e, multi] of result) {
             if (multi == 0) {
                 result.delete(e);
             }
@@ -192,7 +184,7 @@ export class Multiset<K> extends Map<K, number> {
     }
 
     /**
-     * Pick an element of the set.
+     * Picks an element of the set.
      * Almost exclusively used when the set has a unique distinghished element.
      * @returns {K | undefined} An element of the set | undefined if the set is empty.
      */

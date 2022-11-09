@@ -2,31 +2,32 @@
  * @module strategy
  */
 
-import { Multiset } from './multiset';
-import { LabeledVertex, Hypergraph, HGSudokuVanilla } from './geometry';
+import { MSet } from './multiset';
+import { LabeledVertex, Hypergraph } from './hypergraph';
+import { HGSudokuVanilla } from "./sudoku_vanilla";
 
 /** An interface for storing and updating the rendered image. */
 interface PuzzleView {
     /** @todo Design and implement it. */
 }
 
-/** Represents a protocol for representing and exchanging the current puzzle state between solvers. */
+/** A protocol for exchanging the data between solvers. */
 interface SolverMessage<T extends Hypergraph> {
-    /** Represents the puzzle being solved. */
+    /** Represents the game being played. */
     game: T;
-    /** Represents the puzzle rule being used. */
-    puzzle: Hypergraph;
+    /** Represents the remaining candidates. */
+    rawPuzzle: LabeledVertex[];
     /** Represents the setting being used. */
-    settings: SolverSetting;
+    settings: SolverSetting<T>;
     /** Represents the rendered image. */
     view: PuzzleView
 
     /** @todo Review the current design and impement it. */
 }
 
-type SolverStrategyItem<T extends Hypergraph> = (msg: SolverMessage<T>, setting: SolverSetting) => SolverMessage<T>[];
+type SolverStrategyItem<T extends Hypergraph> = (msg: SolverMessage<T>, setting: SolverSetting<T>) => SolverMessage<T>[];
 
-type SolverSetting = {};
+type SolverSetting<T> = {};
 
 class SolverStrategies<T extends Hypergraph> extends Map<string, SolverStrategyItem<T>>{
 }
