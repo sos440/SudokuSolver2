@@ -2,8 +2,7 @@
  * @module strategy
  */
 
-import { MSet } from './multiset';
-import { LabeledVertex, Hypergraph } from './hypergraph';
+import { LabeledVertex, Hyperedge, Hypergraph, NullEdgeGroup, NullLabeledVertex } from './hypergraph';
 import { HGSudokuVanilla } from "./sudoku_vanilla";
 
 /** An interface for storing and updating the rendered image. */
@@ -16,7 +15,7 @@ interface SolverMessage<T extends Hypergraph> {
     /** Represents the game being played. */
     game: T;
     /** Represents the remaining candidates. */
-    rawPuzzle: LabeledVertex[];
+    v_set: Set<LabeledVertex>;
     /** Represents the setting being used. */
     settings: SolverSetting<T>;
     /** Represents the rendered image. */
@@ -25,9 +24,9 @@ interface SolverMessage<T extends Hypergraph> {
     /** @todo Review the current design and impement it. */
 }
 
-type SolverStrategyItem<T extends Hypergraph> = (msg: SolverMessage<T>, setting: SolverSetting<T>) => SolverMessage<T>[];
+type SolverStrategyItem<T extends Hypergraph> = (msg: SolverMessage<T>) => (SolverMessage<T>[]);
 
-type SolverSetting<T> = {};
+type SolverSetting<T extends Hypergraph> = {};
 
 class SolverStrategies<T extends Hypergraph> extends Map<string, SolverStrategyItem<T>>{
 }
@@ -38,9 +37,12 @@ class SolverStrategies<T extends Hypergraph> extends Map<string, SolverStrategyI
  * Implementation for Vanilla Sudoku Game
  */
 
-const SolverStrategiesSV = new SolverStrategies<HGSudokuVanilla>();
+export const SolverStrategiesSV = new SolverStrategies<HGSudokuVanilla>();
 
-type SolverMessageSV = SolverMessage<HGSudokuVanilla>;
+export type SolverMessageSV = SolverMessage<HGSudokuVanilla>;
+
+export type SolverSettingSV = SolverSetting<HGSudokuVanilla>;
+
 
 /**
  * Naked single strategy
@@ -49,32 +51,53 @@ type SolverMessageSV = SolverMessage<HGSudokuVanilla>;
  * erase all the other candidates that can see it.
  */
 
-/*
-SolverStrategiesSV.set(
-    'naked_single',
-    (msg: SolverMessageSV, setting: SolverSetting): SolverMessageSV[] => {
-        const h_seq: SolverMessageSV[] = [];
-        const puzzle: Hypergraph = msg.puzzle;
-        const game: HGSudokuVanilla = msg.game;
 
-        type SolverMessageSV = SolverMessage<HGSudokuVanilla>;
-        const eg_rc = puzzle.edgeGroups.get('rc') || new Map<number, Multiset<LabeledVertex>>();
-        for (const [sno, mset] of eg_rc) {
-            if (mset.size == 1) {
-                const v = mset.pick();
-                const multi = Multiset.subtract(
-                    Multiset.add(
-                        ...Array.from(v?.layers.get('rk')?.keys()).map(sno => puzzle.edgeGroups.get('rk'))
-                        ),
-                    mset
-                )
+/**
+ * @todo It works, but it is TOO LONG. Improve it by faithfully implementing the
+ * general puzzle logic using multiplicies and ranks.
+ */
+ SolverStrategiesSV.set(
+    'naked_single',
+    (msg: SolverMessageSV): SolverMessageSV[] => {
+        const v_set: Set<LabeledVertex> = msg.v_set;
+        const game: HGSudokuVanilla = msg.game;
+        const msg_seq: SolverMessageSV[] = [];
+
+        const v_set_new: Set<LabeledVertex> = new Set(v_set);
+
+        /** This code may be refactors when .filterVertices() are modifed to accept array types. */
+        const puzzle = game.filterVertices((v) => (v_set.has(v)));
+        const eg_rc = puzzle.edgeGroups.get('rc') || NullEdgeGroup;
+        for (const edge of eg_rc) {
+            /** If a naked single has been found: */
+            if (edge.size == 1) {
+                const v = edge.pick() || NullLabeledVertex;
+                /** Computes the ranks of each pencilmark. */
+                const v_multis = Hyperedge.subtract(
+                    Hyperedge.add(...(puzzle.incidency.get(v) || NullEdgeGroup)),
+                    edge
+                );
+                v_multis.delete(v);
+                /** Erases all the vertcies with multiplicity greater than the rank. */
+                for (const [v_del, multi] of v_multis) {
+                    if (multi > 0) {
+                        /** @todo Consider reporting evidences to the solver. */
+                        v_set_new.delete(v_del);
+                    }
+                }
             }
         }
 
-        return h_seq;
+        /** Builds the message list if there are any updates. */
+        if (v_set_new.size < v_set.size){
+            msg_seq.push({
+                game: game,
+                v_set: v_set_new,
+                settings: {},
+                view: {}
+            });
+        }
+
+        return msg_seq;
     }
 );
-*/
-
-const sudoku = new HGSudokuVanilla(3);
-

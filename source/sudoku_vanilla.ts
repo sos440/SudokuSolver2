@@ -50,7 +50,7 @@ export class HGSudokuVanilla extends Hypergraph {
         for (group_name in edge_groups) {
             const group = edge_groups[group_name];
             for (const pos of group.keys()) {
-                group[pos] = new MSet<LabeledVertex>();
+                group[pos] = new Hyperedge();
             }
         }
 

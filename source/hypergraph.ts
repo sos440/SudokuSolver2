@@ -2,8 +2,7 @@
  * @module hypergraph
  */
 
-import { MSet } from './multiset';
-
+import { MSet, createMSetClass } from './multiset';
 
 /**
  * Represents a labeled vertex.
@@ -12,9 +11,11 @@ export class LabeledVertex extends Map<string, any> {}
 
 export const NullLabeledVertex = new LabeledVertex();
 
+export const Hyperedge = createMSetClass<LabeledVertex>(NullLabeledVertex);
+
 export type Hyperedge = MSet<LabeledVertex>;
 
-export const NullHyperedge = new MSet<LabeledVertex>();
+export const NullHyperedge = new Hyperedge();
 
 export type EdgeGroup = Set<Hyperedge>;
 
@@ -149,7 +150,7 @@ export class Hypergraph {
         /** Creates new hyperedges. */
         const replace_edge = new Map<Hyperedge, Hyperedge>();
         for (const edge_old of this.edges) {
-            const edge_new: Hyperedge = new MSet<LabeledVertex>(edge_old);
+            const edge_new: Hyperedge = new Hyperedge(edge_old);
             replace_edge.set(edge_old, edge_new);
             g.edges.add(edge_new);
         }
@@ -176,7 +177,7 @@ export class Hypergraph {
      * Creates a subgraph of all edges that makes the test function true.
      * The vertex set is not changed.
      * @note The copied Hypergraph can be used as an optional argument for the test function, but it will change dynamically during the filtering process.
-     * @todo Optimize it later.
+     * @todo Make it accept Hyperedge[] type. Optimize it later.
      */
     filterEdges (test: (edge: Hyperedge, g?: Hypergraph) => boolean): Hypergraph {
         const result = this.copy();
@@ -191,6 +192,7 @@ export class Hypergraph {
 
     /**
      * Creates a subgraph of all vertices that 
+     * @todo Make it accept LabeledVertex[] type.
      */
     filterVertices (test: (vertex: LabeledVertex, g?: Hypergraph) => boolean): Hypergraph {
         const result = this.copy();
