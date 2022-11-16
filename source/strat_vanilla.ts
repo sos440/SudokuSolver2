@@ -2,8 +2,7 @@
  * @module strategy
  */
 
-import { LabeledVertex, Hyperedge, Hypergraph, NullEdgeGroup, NullLabeledVertex } from './hypergraph';
-import { HGSudokuVanilla } from "./sudoku_vanilla";
+import { SOGame } from "./sudoku_original";
 
 /** An interface for storing and updating the rendered image. */
 interface PuzzleView {
@@ -37,11 +36,11 @@ class SolverStrategies<T extends Hypergraph> extends Map<string, SolverStrategyI
  * Implementation for Vanilla Sudoku Game
  */
 
-export const SolverStrategiesSV = new SolverStrategies<HGSudokuVanilla>();
+export const SolverStrategiesSV = new SolverStrategies<SOGame>();
 
-export type SolverMessageSV = SolverMessage<HGSudokuVanilla>;
+export type SolverMessageSV = SolverMessage<SOGame>;
 
-export type SolverSettingSV = SolverSetting<HGSudokuVanilla>;
+export type SolverSettingSV = SolverSetting<SOGame>;
 
 
 /**
@@ -60,7 +59,7 @@ export type SolverSettingSV = SolverSetting<HGSudokuVanilla>;
     'naked_single',
     (msg: SolverMessageSV): SolverMessageSV[] => {
         const v_set: Set<LabeledVertex> = msg.v_set;
-        const game: HGSudokuVanilla = msg.game;
+        const game: SOGame = msg.game;
         const msg_seq: SolverMessageSV[] = [];
 
         const v_set_new: Set<LabeledVertex> = new Set(v_set);

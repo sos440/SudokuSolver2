@@ -1,105 +1,83 @@
 import { b64_to_uint8, uint8_to_b64 } from './base64';
 import { BaseN } from './tools';
-import { MSet } from './multiset';
-import { LabeledVertex, Hyperedge, Hypergraph, NullEdgeGroup, NullLabeledVertex } from './hypergraph';
+import { Supergraph } from './math/math';
 
-type FormatOptions = 'simple' | 'base64' | 'candibox';
+export type FormatOptions = 'simple' | 'base64' | 'candibox';
+
+export interface SOLabel {
+    index: number;
+    row: number;
+    col: number;
+    key: number;
+    box: number;
+    inn: number;
+    rc: number;
+    rk: number;
+    ck: number;
+    bk: number;
+}
+
+export type SOVertex = number;
+
+export type SOEdge = number;
+
+export type SOGroup = 'rc' | 'rk' | 'ck' | 'bk';
+
+export type SOSupergraph = Supergraph<SOVertex, SOEdge, SOGroup>;
+
+
 /**
- * Represents vanilla sudoku of size parameter Dp
+ * Represents vanilla, original sudoku of size parameter Dp
  */
-
-type SVEdgeGroupNames = 'rc' | 'rk' | 'ck' | 'bk';
-
-export class HGSudokuVanilla extends Hypergraph {
-    /** The dimensional parameter on which all the others depend. */
+export class SOGame extends Supergraph<SOVertex, SOEdge, SOGroup> {
     Dp: number;
-    /** The length of each side. */
     D1: number;
-    /** The area of the botton. */
     D2: number;
-    /** Tehe volume of the 3D lattice. */
     D3: number;
-
-    /** @param {number} Dp The dimensional parameter on which all the others depend. */
+    labels: Map<SOVertex, SOLabel>;
     constructor(Dp: number) {
-        super('rc', 'rk', 'ck', 'bk');
-
-        this.info.type = 'sudoku_vanilla';
-        this.info.param = Dp;
+        super();
 
         this.Dp = Dp;
         this.D1 = this.Dp ** 2;
         this.D2 = this.D1 ** 2;
         this.D3 = this.D1 ** 3;
+        this.labels = new Map<SOVertex, SOLabel>();
 
-        /** Computes vertices. */
         const base_Dp = new BaseN(this.Dp);
         const base_D1 = new BaseN(this.D1);
-
-        /** Creates temporary lists. */
-        const vertex_list = new Array<LabeledVertex>(this.D3);
-
-        const edge_groups = {
-            'rc': new Array<Hyperedge>(this.D2),
-            'rk': new Array<Hyperedge>(this.D2),
-            'ck': new Array<Hyperedge>(this.D2),
-            'bk': new Array<Hyperedge>(this.D2)
-        }
-
-        let group_name: SVEdgeGroupNames;
-        for (group_name in edge_groups) {
-            const group = edge_groups[group_name];
-            for (const pos of group.keys()) {
-                group[pos] = new Hyperedge();
-            }
-        }
-
-        /** 
-         * Crate vertices and 
-         */
-        for (const index of vertex_list.keys()) {
-            const v = new LabeledVertex();
-            vertex_list[index] = v;
-            this.addVertex(v);
-
+        for (const index of Array(this.D3).keys()) {
             const [row, col, key] = base_D1.toDigits(index, 3);
             const digits = base_Dp.toDigits(index, 6);
             const box = base_Dp.fromDigits([digits[0], digits[2]]);
             const inn = base_Dp.fromDigits([digits[1], digits[3]]);
+            const rc = base_D1.fromDigits([row, col]);
+            const rk = base_D1.fromDigits([row, key]);
+            const ck = base_D1.fromDigits([col, key]);
+            const bk = base_D1.fromDigits([box, key]);
 
-            v.set('index', index);
-            v.set('row', row);
-            v.set('col', col);
-            v.set('key', key);
-            v.set('box', box);
-            v.set('inn', inn);
-            v.set('rc', base_D1.fromDigits([row, col]));
-            v.set('rk', base_D1.fromDigits([row, key]));
-            v.set('ck', base_D1.fromDigits([col, key]));
-            v.set('bk', base_D1.fromDigits([box, key]));
+            const id_e_rc = base_D1.fromDigits([0, row, col]);
+            const id_e_rk = base_D1.fromDigits([1, row, key]);
+            const id_e_ck = base_D1.fromDigits([2, col, key]);
+            const id_e_bk = base_D1.fromDigits([3, box, key]);
 
-            let group_name: SVEdgeGroupNames;
-            for (group_name in edge_groups) {
-                const edge = edge_groups[group_name][v.get(group_name)];
-                edge.add(v);
-                this.incidency.get(v)?.add(edge);
-            }
-        }
+            this.labels.set(index, { index: index, row: row, col: col, key: key, box: box, inn: inn, rc: rc, rk: rk, ck: ck, bk: bk });
 
-        for (group_name in edge_groups) {
-            const edge_group = edge_groups[group_name];
-            this.edgeGroups.set(group_name, new Set(edge_group));
-            for (const edge of edge_group){
-                this.edges.add(edge);
-            }
+            this.VE.add(index, id_e_rc);
+            this.VE.add(index, id_e_rk);
+            this.VE.add(index, id_e_ck);
+            this.VE.add(index, id_e_bk);
+            this.EG.add(id_e_rc, 'rc');
+            this.EG.add(id_e_rk, 'rk');
+            this.EG.add(id_e_ck, 'ck');
+            this.EG.add(id_e_bk, 'bk');
         }
     }
-
 
     /**
      * Converts a formatted string to a HGSudokuVanilla.
      */
-    import(input: string, format: FormatOptions = 'base64'): Hypergraph {
+    import(input: string, format: FormatOptions = 'base64'): SOSupergraph {
         /** Guess the format of the string. */
         if (input.length == this.D2) {
             format = 'simple';
@@ -125,8 +103,8 @@ export class HGSudokuVanilla extends Hypergraph {
             }
 
             /** Return the sub-hypergraph filtered by the list. */
-            return this.filterVertices((v) => {
-                return (index_list.indexOf(v.get('index')) >= 0);
+            return this.filter((vertex) => {
+                return (index_list.indexOf(vertex) >= 0);
             });
         }
         else if (format == 'base64') {
@@ -145,10 +123,10 @@ export class HGSudokuVanilla extends Hypergraph {
                     index++;
                 }
             }
-            
+
             /** Return the sub-hypergraph filtered by the list. */
-            return this.filterVertices((v) => {
-                return (index_list.indexOf(v.get('index')) >= 0);
+            return this.filter((vertex) => {
+                return (index_list.indexOf(vertex) >= 0);
             });
         }
         else if (format == 'candibox') {
@@ -166,20 +144,17 @@ export class HGSudokuVanilla extends Hypergraph {
      * Convert the source Hypergraph to a formatted string.
      * The source must be a subgraph of 'this' HGSudokuVanilla graph.
      */
-    export(source: Hypergraph, format: FormatOptions = 'base64'): string {
-        if (!(source.info.type == this.info.type && source.info.param == this.info.param)) {
-            throw TypeError(`The source Hypergraph is not a subgraph of 'this' graph.`);
-        }
-
+    export(source: SOSupergraph, format: FormatOptions = 'base64'): string {
         if (format == 'simple') {
             const result: string[] = new Array(this.D2).fill('.');
-            const group = source.edgeGroups.get('rc') ?? NullEdgeGroup;
-            for (const edge of group) {
+            const group = source.EG.columns.get('rc') as Set<SOEdge>;
+            for (const e_id of group) {
+                const edge = source.VE.columns.get(e_id) as Set<SOVertex>;
                 /** Write a number only when the cell is determined. */
-                if (edge.size == 1) {
-                    const v = edge.pick() || NullLabeledVertex;
-                    const grid_sno: number = v.get('rc') ?? -1;
-                    result[grid_sno] = String.fromCharCode(0x31 + (v.get('key') ?? 0));
+                if (typeof edge != 'undefined' && edge.size == 1) {
+                    const index = [...edge.keys()][0];
+                    const cur_label = (this.labels.get(index) as SOLabel);
+                    result[cur_label.rc] = String.fromCharCode(0x31 + cur_label.key);
                 }
             }
             return result.join('');
@@ -191,8 +166,8 @@ export class HGSudokuVanilla extends Hypergraph {
                 /** @type {number} Current character. */
                 let c: number = 0;
                 for (let i = 0; i < 8; i++) {
-                    const v = source.firstVertexOf('index', pos * 8 + i);
-                    if (v != NullLabeledVertex) {
+                    const index = pos * 8 + i;
+                    if (source.VE.rows.has(index)) {
                         c |= 1 << i;
                     }
                 }
@@ -218,10 +193,10 @@ export class HGSudokuVanilla extends Hypergraph {
 
             /** Fill in the candidates. */
             const baseDp = new BaseN(this.Dp);
-            for (const v of source.incidency.keys()) {
-                const digits = baseDp.toDigits(v.get('index') ?? 0, 6);
+            for (const index of source.VE.rows.keys()) {
+                const digits = baseDp.toDigits(index, 6);
                 const idx = baseDp.fromDigits([digits[0], digits[1], digits[4], digits[2], digits[3], digits[5]]);
-                template[slots[idx]] = String.fromCharCode(0x31 + (v.get('key') || 0));
+                template[slots[idx]] = String.fromCharCode(0x31 + (this.labels.get(index)?.key || 0));
             }
 
             return template.join('');
