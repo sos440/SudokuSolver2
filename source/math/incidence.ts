@@ -112,10 +112,10 @@ export class IncidenceMatrix<A, B> {
     }
 
     /** Creates a new IncidenceMatrix by applying the specified transform to the pairs of the current IncidenceMatrix. */
-    transform<C, D>(callback: (a: A, b: B, m?: this) => [C, D]): IncidenceMatrix<C, D> {
+    map<C, D>(transform: (a: A, b: B, m?: this) => [C, D]): IncidenceMatrix<C, D> {
         const result = new IncidenceMatrix<C, D>();
         for (const [a, b] of this) {
-            result.add(...callback(a, b, this));
+            result.add(...transform(a, b, this));
         }
         return result;
     }
@@ -133,7 +133,7 @@ export class IncidenceMatrix<A, B> {
 
     /** Returns the transpose of the IncidenceMatrix. */
     transpose(): IncidenceMatrix<B, A> {
-        return this.transform((a, b) => [b, a]);
+        return this.map((a, b) => [b, a]);
     }
 
     /** Creates a copy of the IncidenceMatrix. */

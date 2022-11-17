@@ -55,15 +55,15 @@ Object.defineProperty(Map, 'merge', {
 declare global {
     interface Map<K, V> {
         /** Creates a new Map consisting of all key-value pairs that pass the test. */
-        filter(test: (key: K, value: V, map: Map<K, V>) => boolean): Map<K, V>;
+        filter(test: (key: K, value: V, map?: Map<K, V>) => boolean): Map<K, V>;
         /** Creates a new Map by applying the map to each value of the key-value pair. */
-        map<W>(trans: (key: K, value: V, map: Map<K, V>) => W): Map<K, W>;
+        map<W>(transform: (key: K, value: V, map?: Map<K, V>) => W): Map<K, W>;
         /** Clears empty keys. */
         clearEmptyKeys(): Map<K, V>;
     }
 }
 
-const map_filter = function <K, V>(this: Map<K, V>, test: (key: K, value: V, map: Map<K, V>) => boolean): Map<K, V> {
+const map_filter = function <K, V>(this: Map<K, V>, test: (key: K, value: V, map?: Map<K, V>) => boolean): Map<K, V> {
     const result = new Map<K, V>();
     for (const [key, value] of this) {
         if (test(key, value, this)) {
@@ -73,10 +73,10 @@ const map_filter = function <K, V>(this: Map<K, V>, test: (key: K, value: V, map
     return result;
 };
 
-const map_map = function <K, V, W>(this: Map<K, V>, trans: (key: K, value: V, map: Map<K, V>) => W): Map<K, W> {
+const map_map = function <K, V, W>(this: Map<K, V>, transform: (key: K, value: V, map?: Map<K, V>) => W): Map<K, W> {
     const result = new Map<K, W>();
     for (const [key, value] of this) {
-        result.set(key, trans(key, value, this));
+        result.set(key, transform(key, value, this));
     }
     return result;
 };

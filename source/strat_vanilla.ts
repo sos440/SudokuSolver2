@@ -2,101 +2,196 @@
  * @module strategy
  */
 
-import { SOGame } from "./sudoku_original";
+import { SOVertex, SOEdge, SOSupergraph, SOGroup } from "./sudoku_original";
 
-/** An interface for storing and updating the rendered image. */
-interface PuzzleView {
-    /** @todo Design and implement it. */
+/** Represents annotations on the puzzle canvas. */
+interface PuzzleCanvasAnnotations {
 }
 
-/** A protocol for exchanging the data between solvers. */
-interface SolverMessage<T extends Hypergraph> {
-    /** Represents the game being played. */
-    game: T;
-    /** Represents the remaining candidates. */
-    v_set: Set<LabeledVertex>;
-    /** Represents the setting being used. */
-    settings: SolverSetting<T>;
-    /** Represents the rendered image. */
-    view: PuzzleView
-
-    /** @todo Review the current design and impement it. */
+/** Represents any action that can be done on the puzzle canvas. */
+interface PuzzleAction {
+    query: string;
 }
 
-type SolverStrategyItem<T extends Hypergraph> = (msg: SolverMessage<T>) => (SolverMessage<T>[]);
+/** Represents log messages to be displayed. */
+interface SolverLogMessage {
+}
 
-type SolverSetting<T extends Hypergraph> = {};
+/** Represents items in the timeline. */
+export class HistoryElement {
+    /** The type of the HistoryElement. */
+    type: string = 'undefined';
+    /** Set of vertices in the current puzzle. */
+    vertices?: Set<SOVertex>;
+    /** Set of givens (clues) in the current puzzle. */
+    clues?: Set<SOVertex>;
+    /** Set of determined vertices (including givens) in the current puzzle. */
+    determined?: Set<SOVertex>;
+    /** List of actions to be applied to the puzzle canvas/editor/etc. */
+    actions: PuzzleAction[];
 
-class SolverStrategies<T extends Hypergraph> extends Map<string, SolverStrategyItem<T>>{
+    constructor(arg: string | object | undefined) {
+        this.actions = new Array<PuzzleAction>();
+        if (typeof arg == 'undefined') {
+            /** Do nothing */
+        }
+        else if (typeof arg == 'string') {
+            this.type = arg;
+        }
+        else {
+            Object.assign(this, arg);
+        }
+    }
+}
+
+/** The singleton object that controls the history. */
+export class History {
+    static timeline = new Array<HistoryElement[]>();
+    static time = -1;
+    static substep = 0;
+
+    static next(): void {
+    }
+
+    static previous(): void {
+    }
+
+    static jump(time: number): void {
+    }
+
+    static view(): void {
+    }
+
+    static add(segment: HistoryElement[]): void {
+    }
+
+    static forgetFuture(): void {
+    }
+}
+
+/** Represents an input of a strategy function. */
+interface SolverRequest {
+    puzzle: SOSupergraph;
+    determined?: Set<SOVertex>;
 }
 
 
+export namespace SOStrategies {
+    /** Obvious Candidate Removal */
+    export const obviousCandidateRemoval = function (request: SolverRequest): HistoryElement[] {
+        if (typeof request.determined == 'undefined') {
+            throw TypeError(`A set of determined vertices must be provided.`);
+        }
 
-/**
- * Implementation for Vanilla Sudoku Game
- */
+        let is_updated = false;
+        const VE = request.puzzle.VE;
+        const vertices = new Set<SOVertex>([...VE.rows.keys()]);
+        const determined = request.determined;
+        const h_seg = [
+            new HistoryElement({
+                type: 'obvious candidate removal',
+                actions: [{ query: `updated by obvious candidate removal` }]
+            }),
+            new HistoryElement({
+                type: 'obvious candidate removal',
+                vertices: vertices
+            })
+        ];
 
-export const SolverStrategiesSV = new SolverStrategies<SOGame>();
+        /** For each determined vertex in a cell represented by its index: */
+        for (const index of determined) {
+            /** Computes the set of vertices that can see the determined vertex. */
+            const incident_edges = VE.rows.get(index) as Set<SOEdge>;
+            const incident_edge_set = VE.columns.filter((edge, _) => incident_edges.has(edge));
+            const vertex_visible = Set.union(...incident_edge_set.values());
+            vertex_visible.delete(index);
+            /** Loops through the 'visible' vertices. */
+            for (const index2 of vertex_visible) {
+                is_updated = true;
+                vertices.delete(index2);
+                h_seg[0].actions.push({ query: `highlight ${index2} as removed` });
+                h_seg[1].actions.push({ query: `unmark ${index2}` });
+                h_seg[1].actions.push({ query: `unhighlight ${index2}` });
+            }
+        }
 
-export type SolverMessageSV = SolverMessage<SOGame>;
-
-export type SolverSettingSV = SolverSetting<SOGame>;
-
-
-/**
- * Naked single strategy
- * When you know that a given cell can contain only a single candiate,
- * you can determine the cell's value as that candidate and then
- * erase all the other candidates that can see it.
- */
+        return (is_updated) ? h_seg : [];
+    }
 
 
-/**
- * @todo It works, but it is TOO LONG. Improve it by faithfully implementing the
- * general puzzle logic using multiplicies and ranks.
- */
- SolverStrategiesSV.set(
-    'naked_single',
-    (msg: SolverMessageSV): SolverMessageSV[] => {
-        const v_set: Set<LabeledVertex> = msg.v_set;
-        const game: SOGame = msg.game;
-        const msg_seq: SolverMessageSV[] = [];
+    /** Naked single */
+    export const nakedSingle = function (request: SolverRequest): HistoryElement[] {
+        if (typeof request.determined == 'undefined') {
+            throw TypeError(`A set of determined vertices must be provided.`);
+        }
 
-        const v_set_new: Set<LabeledVertex> = new Set(v_set);
+        let is_updated = false;
+        const VE = request.puzzle.VE;
+        const EG = request.puzzle.EG;
+        const determined = new Set(request.determined);
+        const h_seg = [
+            new HistoryElement({
+                type: 'naked single',
+                actions: [{ query: `updated by naked single` }]
+            }),
+            new HistoryElement({
+                type: 'naked single',
+                determined: determined
+            })
+        ];
 
-        /** This code may be refactors when .filterVertices() are modifed to accept array types. */
-        const puzzle = game.filterVertices((v) => (v_set.has(v)));
-        const eg_rc = puzzle.edgeGroups.get('rc') || NullEdgeGroup;
-        for (const edge of eg_rc) {
+        /** Loops through cells to find naked singles: */
+        for (const edge of EG.columns.get('rc') as Set<SOEdge>) {
+            const vertex_set = VE.columns.get(edge) as Set<SOVertex>;
+            const first_vertex = [...vertex_set][0];
             /** If a naked single has been found: */
-            if (edge.size == 1) {
-                const v = edge.pick() || NullLabeledVertex;
-                /** Computes the ranks of each pencilmark. */
-                const v_multis = Hyperedge.subtract(
-                    Hyperedge.add(...(puzzle.incidency.get(v) || NullEdgeGroup)),
-                    edge
-                );
-                v_multis.delete(v);
-                /** Erases all the vertcies with multiplicity greater than the rank. */
-                for (const [v_del, multi] of v_multis) {
-                    if (multi > 0) {
-                        /** @todo Consider reporting evidences to the solver. */
-                        v_set_new.delete(v_del);
-                    }
+            if (vertex_set.size == 1 && !determined.has(first_vertex)) {
+                is_updated = true;
+                determined.add(first_vertex);
+                h_seg[0].actions.push({ query: `highlight ${first_vertex} as determined` });
+                h_seg[0].actions.push({ query: `determine ${first_vertex}` });
+                h_seg[1].actions.push({ query: `unhighlight ${first_vertex}` });
+            }
+        }
+
+        return (is_updated) ? h_seg : [];
+    }
+
+
+    /** Hidden single */
+    export const hiddenSingle = function (request: SolverRequest): HistoryElement[] {
+        let is_updated = false;
+        const VE = request.puzzle.VE;
+        const EG = request.puzzle.EG;
+        const vertices = new Set<SOVertex>([...VE.rows.keys()]);
+        const h_seg = [
+            new HistoryElement({
+                type: 'hidden single',
+                actions: [{ query: `updated by hidden single` }]
+            }),
+            new HistoryElement({
+                type: 'hidden single',
+                vertices: vertices
+            })
+        ];
+
+        /** Loop through *K-type units to find hidden singles: */
+        for (const group of ['rk', 'ck', 'bk'] as SOGroup[]){
+            for (const edge of EG.columns.get(group) as Set<SOEdge>){
+                const vertex_set = VE.columns.get(edge) as Set<SOVertex>;
+                const first_vertex = [...vertex_set][0];
+                /** If a hidden single has been found: */
+                if (vertex_set.size == 1) {
+                    is_updated = true;
+                    vertices.delete(first_vertex);
+                    h_seg[0].actions.push({ query: `highlight ${first_vertex} as removed` });
+                    h_seg[0].actions.push({ query: `log "Vertex ${first_vertex} is a hidden single of type ${group}."` });
+                    h_seg[1].actions.push({ query: `unmark ${first_vertex}` });
+                    h_seg[1].actions.push({ query: `unhighlight ${first_vertex}` });
                 }
             }
         }
 
-        /** Builds the message list if there are any updates. */
-        if (v_set_new.size < v_set.size){
-            msg_seq.push({
-                game: game,
-                v_set: v_set_new,
-                settings: {},
-                view: {}
-            });
-        }
-
-        return msg_seq;
+        return (is_updated) ? h_seg : [];
     }
-);
+}

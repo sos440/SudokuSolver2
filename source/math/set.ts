@@ -7,34 +7,52 @@
 declare global {
     interface SetConstructor {
         /** Computes the union of the two Sets. */
-        union<T>(set_a: Set<T>, set_b: Set<T>): Set<T>;
+        union<T>(...sets: Set<T>[]): Set<T>;
         /** Computes the intersection of the two Sets. */
-        intersection<T>(set_a: Set<T>, set_b: Set<T>): Set<T>;
+        intersection<T>(...sets: Set<T>[]): Set<T>;
     }
 }
 
-const set_union = function <T>(set_a: Set<T>, set_b: Set<T>): Set<T> {
-    if (set_a.size < set_b.size) {
-        [set_a, set_b] = [set_b, set_a];
+const set_union = function <T>(...sets: Set<T>[]): Set<T> {
+    if (sets.length == 0){
+        return new Set<T>();
     }
-    const result = new Set<T>(set_a);
-    for (const e of set_b) {
-        result.add(e);
+    else if (sets.length == 1){
+        return new Set<T>(sets[0]);
     }
-    return result;
+    else if (sets.length == 2){
+        const [set_a, set_b] = (sets[0].size > sets[1].size) ? sets : sets.reverse();
+        const result = new Set<T>(set_a);
+        for (const e of set_b) {
+            result.add(e);
+        }
+        return result;
+    }
+    else {
+        return set_union(set_union(...sets.slice(0, 2)), ...sets.slice(2));
+    }
 };
 
-const set_intersection = function <T>(set_a: Set<T>, set_b: Set<T>): Set<T> {
-    if (set_a.size > set_b.size) {
-        [set_a, set_b] = [set_b, set_a];
+const set_intersection = function <T>(...sets: Set<T>[]): Set<T> {
+    if (sets.length == 0){
+        throw RangeError(`Set intersection requires at least one set.`);
     }
-    const result = new Set<T>(set_a);
-    for (const e of set_a) {
-        if (!set_b.has(e)) {
-            result.delete(e);
+    else if (sets.length == 1){
+        return new Set<T>(sets[0]);
+    }
+    else if (sets.length == 2){
+        const [set_a, set_b] = (sets[0].size < sets[1].size) ? sets : sets.reverse();
+        const result = new Set<T>(set_a);
+        for (const e of set_a) {
+            if (!set_b.has(e)) {
+                result.delete(e);
+            }
         }
+        return result;
     }
-    return result;
+    else {
+        return set_intersection(set_intersection(...sets.slice(0, 2)), ...sets.slice(2));
+    }
 }
 
 Object.defineProperty(Set, 'union', {
@@ -52,13 +70,13 @@ Object.defineProperty(Set, 'intersection', {
 declare global {
     interface Set<T> {
         /** Creates a new Set consisting of all elements that pass the test. */
-        filter(test: (e: T, set: Set<T>) => boolean): Set<T>;
+        filter(test: (e: T, set?: Set<T>) => boolean): Set<T>;
         /** Creates a new Set by applying the map to each element. */
-        map<U>(trans: (e: T, set: Set<T>) => U): Set<U>;
+        map<U>(transform: (e: T, set?: Set<T>) => U): Set<U>;
     }
 }
 
-const set_filter = function <T>(this: Set<T>, test: (e: T, set: Set<T>) => boolean): Set<T> {
+const set_filter = function <T>(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): Set<T> {
     const result = new Set<T>();
     for (const e of this) {
         if (test(e, this)) {
@@ -68,10 +86,10 @@ const set_filter = function <T>(this: Set<T>, test: (e: T, set: Set<T>) => boole
     return result;
 };
 
-const set_map = function <T, U>(this: Set<T>, trans: (e: T, set: Set<T>) => U): Set<U> {
+const set_map = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) => U): Set<U> {
     const result = new Set<U>();
     for (const e of this) {
-        result.add(trans(e, this));
+        result.add(transform(e, this));
     }
     return result;
 };
