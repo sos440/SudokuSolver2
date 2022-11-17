@@ -8,6 +8,9 @@ import { BaseN, MDIterator } from "../tools";
 type Attributes = { [key: string]: any };
 
 
+/**
+ * A simple SVG container for method chaining style.
+ */
 export class SVG {
     element: SVGElement;
     constructor(tag_name: string, attr?: Attributes) {
@@ -22,18 +25,50 @@ export class SVG {
 
     attr(attr: Attributes = {}): this {
         for (const key in attr) {
-            this.element.setAttribute(key, attr[key]);
+            if (typeof attr[key] == 'undefined' || attr[key] == null) {
+                this.element.removeAttribute(key);
+            }
+            else {
+                this.element.setAttribute(key, attr[key]);
+            }
         }
         return this;
     }
 
-    addTo(parent: HTMLElement | SVGElement): this {
-        parent.appendChild(this.element);
+    addTo(parent: HTMLElement | SVGElement | SVG): this {
+        if (parent instanceof SVG) {
+            parent = parent.element;
+        }
+        if (!parent.contains(this.element)) {
+            parent.appendChild(this.element);
+        }
         return this;
+    }
+
+    remove(child: HTMLElement | SVGElement | SVG): this {
+        if (child instanceof SVG) {
+            child = child.element;
+        }
+        if (this.element.contains(child)) {
+            this.element.removeChild(child);
+        }
+        return this;
+    }
+
+    use(id: string, attr?: Attributes): SVG {
+        return new SVG('use').attr({ 'href': id }).attr(attr).addTo(this.element);
     }
 
     g(attr?: Attributes): SVG {
         return new SVG('g').attr(attr).addTo(this.element);
+    }
+
+    defs(attr?: Attributes): SVG {
+        return new SVG('defs').attr(attr).addTo(this.element);
+    }
+
+    symbol(attr?: Attributes): SVG {
+        return new SVG('symbol').attr(attr).addTo(this.element);
     }
 
     rect(attr?: Attributes): SVG {
@@ -70,78 +105,165 @@ export class SVG {
 }
 
 
+/**
+ * A container for a family of text-in-boxes.
+ */
+class SVGGroup {
+    elements: Map<number, SVG>;
+    group: SVG;
+    constructor(group: SVG) {
+        this.group = group;
+        this.elements = new Map<number, SVG>();
+    }
+
+    get(key: number) {
+        return this.elements.get(key);
+    }
+
+    set(key: number, elem: SVG) {
+        this.elements.set(key, elem);
+        this;
+    }
+
+    show(key: number) {
+        if (!this.elements.has(key)) { return; }
+        const elem = this.elements.get(key) as SVG;
+        return elem.addTo(this.group);
+    }
+
+    hide(key: number) {
+        if (!this.elements.has(key)) { return; }
+        const elem = this.elements.get(key) as SVG;
+        this.group.remove(elem.element);
+        return elem;
+    }
+
+    showAll() {
+        this.elements.map((_, elem) => elem.addTo(this.group));
+        return this;
+    }
+
+    hideAll() {
+        this.elements.map((_, elem) => this.group.remove(elem));
+        return this;
+    }
+
+    clearStyle(key: number) {
+        if (!this.elements.has(key)) { return; }
+        const attr_keep = new Set(['x', 'y', 'width', 'height', 'rx', 'ry', 'href']);
+        const elem = this.elements.get(key) as SVG;
+        for (const cur_attr of elem.element.attributes) {
+            if (attr_keep.has(cur_attr.name)) { continue; }
+            elem.element.removeAttribute(cur_attr.name);
+        }
+        return elem;
+    }
+
+    clearAll() {
+        this.elements.map((key, elem) => this.clearStyle(key));
+        return this;
+    }
+}
+
+
 export class PuzzleCanvas {
     style: object;
     canvas: SVG;
     headerGroup: SVG;
-    cellsGroup: SVG;
-    marksGroup: SVG;
-    cells: Map<number, SVG>;
-    marks: Map<number, SVG>;
+    cellRects: SVGGroup;
+    cellTexts: SVGGroup;
+    markRects: SVGGroup;
+    markTexts: SVGGroup;
     constructor(options: Attributes = {}) {
         const o = PuzzleCanvas.computeStyle(options) as Attributes;
         const svg = new SVG('svg').attr({
             width: o['canvas-width'],
             height: o['canvas-height'],
-            viewBox: `0 0 ${o['canvas-width']} ${o['canvas-height']}`
+            viewBox: `0 0 ${o['canvas-width']} ${o['canvas-height']}`,
+            'text-anchor': 'middle',
+            'dominant-baseline': 'middle'
         });
 
+        const rows = o['rows'];
+        const cols = o['columns'];
+        const Dp = o['dimension'];
+        const D1 = Dp ** 2;
+
         /** Background */
-        svg.rect({ width: o['canvas-width'], height: o['canvas-height'] }).attr(o['background']);
+        svg.rect({ id: 'bg', width: o['canvas-width'], height: o['canvas-height'] }).attr(o['background']);
 
         /** Header group */
-        this.headerGroup = svg.g(o['header-font']);
+        this.headerGroup = svg.g({ id: 'header' }).attr(o['header-font']);
         if (o['headers'] == 'display') {
             const c_hdr_size = 0.5 * (o['header-size'] + o['grid-padding']);
-            for (const i of new Array(o['rows']).keys()) {
+            for (const i of new Array(rows).keys()) {
                 const cell_xy = PuzzleCanvas.cellCenterXY(0, i, o);
                 this.headerGroup.text(
-                    o['header-row'].charAt(i),
+                    o['header-row-symbols'].charAt(i),
                     { x: c_hdr_size, y: cell_xy[1] }
                 );
             }
-            for (const i of new Array(o['columns']).keys()) {
+            for (const i of new Array(cols).keys()) {
                 const cell_xy = PuzzleCanvas.cellCenterXY(i, 0, o);
                 this.headerGroup.text(
-                    o['header-column'].charAt(i),
+                    o['header-column-symbols'].charAt(i),
                     { x: cell_xy[0], y: c_hdr_size }
                 );
             }
         }
 
-        /** Cell groups */
-        this.cellsGroup = svg.g({ fill: 'white' });
-        this.cells = new Map<number, SVG>();
-        for (const [x, y] of MDIterator([o['columns'], o['rows']])) {
-            const cell_xy = PuzzleCanvas.cellXY(x, y, o);
-            this.cells.set(
-                x + o['columns'] * y,
-                this.cellsGroup.rect({
-                    x: cell_xy[0],
-                    y: cell_xy[1],
-                    width: o['cell-size'],
-                    height: o['cell-size'],
-                    rx: 4,
-                    ry: 4
-                })
+        /** Generates a cell group. */
+        const cell_dw = o['cell-size'];
+        this.cellRects = new SVGGroup(svg.g({ id: 'cell_rect', fill: 'white' }));
+        this.cellTexts = new SVGGroup(svg.g({ id: 'cell_text' }).attr(o['cell-font']));
+        for (const [x, y] of MDIterator([cols, rows])) {
+            const index = y * cols + x;
+            const pos = PuzzleCanvas.cellXY(x, y, o);
+            this.cellRects.set(
+                index,
+                new SVG('rect', { x: pos[0], y: pos[1], width: cell_dw, height: cell_dw, rx: 4, ry: 4 })
+            );
+            this.cellTexts.set(
+                index,
+                new SVG('text', { x: pos[0] + 0.5 * cell_dw, y: pos[1] + 0.5 * cell_dw })
             );
         }
 
-        /** Mark group */
-        this.marksGroup = svg.g();
-        this.marks = new Map<number, SVG>();
+        /** Generates a mark group. */
+        const mark_dw = o['mark-size'];
+        this.markRects = new SVGGroup(svg.g({ id: 'mark_rect' }));
+        this.markTexts = new SVGGroup(svg.g({ id: 'mark_text' }).attr(o['mark-font']));
+        for (const [x, y, key] of MDIterator([cols, rows, D1])) {
+            const index = (y * cols + x) * D1 + key;
+            const pos = PuzzleCanvas.markXY(x, y, key, o);
+            this.markRects.set(
+                index,
+                new SVG('rect', { x: pos[0], y: pos[1], width: mark_dw, height: mark_dw, rx: 4, ry: 4 })
+            );
+            this.markTexts.set(
+                index,
+                new SVG('text')
+                    .html(o['mark-symbols'].charAt(key))
+                    .attr({ x: pos[0] + 0.5 * mark_dw, y: pos[1] + 0.5 * mark_dw })
+            );
+        }
 
+        this.cellRects.showAll();
         this.style = o;
         this.canvas = svg;
     }
 
+    /** Returns a computed style. */
     static computeStyle(o: Attributes = {}) {
         o = Object.assign(Object.assign({}, PuzzleCanvas.options), o);
 
-        if (o['rows'] != o['header-row'].length) {
+        if (o['rows'] != o['header-row-symbols'].length) {
             throw RangeError(`The length of the row header does not match the number of rows.`);
         }
-        else if (o['columns'] != o['header-column'].length) {
+        else if (o['columns'] != o['header-column-symbols'].length) {
+            throw RangeError(`The length of the column header does not match the number of columns.`);
+        }
+        else if (o['dimension'] ** 2 != o['mark-symbols'].length) {
             throw RangeError(`The length of the column header does not match the number of columns.`);
         }
 
@@ -163,8 +285,6 @@ export class PuzzleCanvas {
 
         o['canvas-width'] = o['grid-width'] + (o['headers'] == 'display' ? o['header-size'] : 0);
         o['canvas-height'] = o['grid-height'] + (o['headers'] == 'display' ? o['header-size'] : 0);
-
-        console.log(o);
 
         return o;
     }
@@ -209,7 +329,7 @@ export class PuzzleCanvas {
         const mark_idx = [key % Dp, Math.trunc(key / Dp)];
 
         return pos.map((_, i) => {
-            return (cell_xy[i] + mark_idx[i] * (o['cell-inner_sep'] + o['cell-size']));
+            return (cell_xy[i] + mark_idx[i] * (o['cell-inner-sep'] + o['mark-size']) + o['cell-inner-sep']);
         });
     }
 
@@ -224,40 +344,41 @@ export class PuzzleCanvas {
         'dimension': 3,
 
         'mark-size': 14,
+        'mark-symbols': '123456789',
+
         'cell-inner-sep': 1,
         'cell-padding': 1,
+
         'box-inner-sep': 1,
         'box-padding': 0,
+
         'grid-inner-sep': 3,
         'grid-padding': 4,
+
         'headers': 'display', /** display | none */
         'header-size': 12,
-        'header-row': 'ABCDEFGHJ',
-        'header-column': '123456789',
+        'header-row-symbols': 'ABCDEFGHJ',
+        'header-column-symbols': '123456789',
 
         'background': {
-            fill: 'black'
+            fill: 'black',
+            rx: 4,
+            ry: 4
         },
         'header-font': {
             'font-family': 'Helvetica',
             'font-size': 10,
-            fill: 'white',
-            'text-anchor': 'middle',
-            'dominant-baseline': 'middle'
+            fill: 'white'
         },
         'mark-font': {
             'font-family': 'Helvetica',
             'font-size': 9,
-            fill: 'white',
-            'text-anchor': 'middle',
-            'dominant-baseline': 'middle'
+            fill: 'black'
         },
         'cell-font': {
             'font-family': 'Helvetica',
             'font-size': 30,
-            fill: 'white',
-            'text-anchor': 'middle',
-            'dominant-baseline': 'middle'
+            fill: 'black'
         },
     }
 }
