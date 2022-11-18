@@ -2,10 +2,20 @@
  * @module canvas
  */
 
-import { BaseN, MDIterator } from "../tools";
+import { MDIterator } from "../tools";
 
 
-type Attributes = { [key: string]: any };
+/** Represents a puzzle augmented with annotations. */
+export interface PuzzleCanvasSnapshot {
+    vertices?: Set<number>;
+    clues?: Set<number>;
+    determined?: Set<number>;
+    pencilmarked?: Set<number>;
+    annotations?: string[];
+}
+
+
+export type Attributes = { [key: string]: any };
 
 
 /**
@@ -148,35 +158,36 @@ class SVGGroup {
         return this;
     }
 
-    clearStyle(key: number) {
-        if (!this.elements.has(key)) { return; }
-        const attr_keep = new Set(['x', 'y', 'width', 'height', 'rx', 'ry', 'href']);
-        const elem = this.elements.get(key) as SVG;
-        for (const cur_attr of elem.element.attributes) {
-            if (attr_keep.has(cur_attr.name)) { continue; }
-            elem.element.removeAttribute(cur_attr.name);
+    clearStyle(arg: number | SVG) {
+        const elem = (arg instanceof SVG) ? arg : this.elements.get(arg);
+        const attr_remove = ['fill', 'stroke', 'stroke-width'];
+        if (typeof elem == 'undefined') { return; }
+        for (const attr of attr_remove) {
+            elem.element.removeAttribute(attr);
         }
         return elem;
     }
 
     clearAll() {
-        this.elements.map((key, elem) => this.clearStyle(key));
+        this.elements.map((_, elem) => this.clearStyle(elem));
         return this;
     }
 }
 
 
-export class PuzzleCanvas {
-    style: object;
-    canvas: SVG;
+export class PuzzleCanvas extends SVG {
+    style: Attributes;
     headerGroup: SVG;
     cellRects: SVGGroup;
     cellTexts: SVGGroup;
     markRects: SVGGroup;
     markTexts: SVGGroup;
     constructor(options: Attributes = {}) {
+        super('svg');
         const o = PuzzleCanvas.computeStyle(options) as Attributes;
-        const svg = new SVG('svg').attr({
+
+        /** Basic styles. */
+        this.attr({
             width: o['canvas-width'],
             height: o['canvas-height'],
             viewBox: `0 0 ${o['canvas-width']} ${o['canvas-height']}`,
@@ -190,10 +201,10 @@ export class PuzzleCanvas {
         const D1 = Dp ** 2;
 
         /** Background */
-        svg.rect({ id: 'bg', width: o['canvas-width'], height: o['canvas-height'] }).attr(o['background']);
+        this.rect({ id: 'bg', width: o['canvas-width'], height: o['canvas-height'] }).attr(o['background']);
 
         /** Header group */
-        this.headerGroup = svg.g({ id: 'header' }).attr(o['header-font']);
+        this.headerGroup = this.g({ id: 'header' }).attr(o['header-font']);
         if (o['headers'] == 'display') {
             const c_hdr_size = 0.5 * (o['header-size'] + o['grid-padding']);
             for (const i of new Array(rows).keys()) {
@@ -214,8 +225,8 @@ export class PuzzleCanvas {
 
         /** Generates a cell group. */
         const cell_dw = o['cell-size'];
-        this.cellRects = new SVGGroup(svg.g({ id: 'cell_rect', fill: 'white' }));
-        this.cellTexts = new SVGGroup(svg.g({ id: 'cell_text' }).attr(o['cell-font']));
+        this.cellRects = new SVGGroup(this.g({ id: 'cell_rect', fill: 'white' }));
+        this.cellTexts = new SVGGroup(this.g({ id: 'cell_text' }).attr(o['cell-font']));
         for (const [x, y] of MDIterator([cols, rows])) {
             const index = y * cols + x;
             const pos = PuzzleCanvas.cellXY(x, y, o);
@@ -231,8 +242,8 @@ export class PuzzleCanvas {
 
         /** Generates a mark group. */
         const mark_dw = o['mark-size'];
-        this.markRects = new SVGGroup(svg.g({ id: 'mark_rect' }));
-        this.markTexts = new SVGGroup(svg.g({ id: 'mark_text' }).attr(o['mark-font']));
+        this.markRects = new SVGGroup(this.g({ id: 'mark_rect' }));
+        this.markTexts = new SVGGroup(this.g({ id: 'mark_text' }).attr(o['mark-font']));
         for (const [x, y, key] of MDIterator([cols, rows, D1])) {
             const index = (y * cols + x) * D1 + key;
             const pos = PuzzleCanvas.markXY(x, y, key, o);
@@ -250,7 +261,6 @@ export class PuzzleCanvas {
 
         this.cellRects.showAll();
         this.style = o;
-        this.canvas = svg;
     }
 
     /** Returns a computed style. */
@@ -380,5 +390,35 @@ export class PuzzleCanvas {
             'font-size': 30,
             fill: 'black'
         },
+
+        'rect:removed': {
+            'fill': 'yellow',
+            'stroke': 'pink',
+            'stroke-width': 0.75
+        },
+        'rect:determined': {
+            'fill': '#6fff83',
+            'stroke': 'olive',
+            'stroke-width': 0.75
+        },
+        'rect:based': {
+            'fill': '#73b2ff',
+            'stroke': 'blue',
+            'stroke-width': 0.75
+        },
+        'rect:affected': {
+            'fill': 'lime',
+            'stroke': 'green',
+            'stroke-width': 0.75
+        },
+
+        'text:removed': {
+            'fill': 'red'
+        },
+        'text:determined': {
+            'fill': 'blue'
+        },
+        'text:based': {},
+        'text:affected': {},
     }
 }

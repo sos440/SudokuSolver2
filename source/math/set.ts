@@ -10,17 +10,19 @@ declare global {
         union<T>(...sets: Set<T>[]): Set<T>;
         /** Computes the intersection of the two Sets. */
         intersection<T>(...sets: Set<T>[]): Set<T>;
+        /** Computes the first set subtracted by the second set. */
+        diff<T>(set_a: Set<T>, set_b: Set<T>): Set<T>;
     }
 }
 
 const set_union = function <T>(...sets: Set<T>[]): Set<T> {
-    if (sets.length == 0){
+    if (sets.length == 0) {
         return new Set<T>();
     }
-    else if (sets.length == 1){
+    else if (sets.length == 1) {
         return new Set<T>(sets[0]);
     }
-    else if (sets.length == 2){
+    else if (sets.length == 2) {
         const [set_a, set_b] = (sets[0].size > sets[1].size) ? sets : sets.reverse();
         const result = new Set<T>(set_a);
         for (const e of set_b) {
@@ -34,13 +36,13 @@ const set_union = function <T>(...sets: Set<T>[]): Set<T> {
 };
 
 const set_intersection = function <T>(...sets: Set<T>[]): Set<T> {
-    if (sets.length == 0){
+    if (sets.length == 0) {
         throw RangeError(`Set intersection requires at least one set.`);
     }
-    else if (sets.length == 1){
+    else if (sets.length == 1) {
         return new Set<T>(sets[0]);
     }
-    else if (sets.length == 2){
+    else if (sets.length == 2) {
         const [set_a, set_b] = (sets[0].size < sets[1].size) ? sets : sets.reverse();
         const result = new Set<T>(set_a);
         for (const e of set_a) {
@@ -55,6 +57,14 @@ const set_intersection = function <T>(...sets: Set<T>[]): Set<T> {
     }
 }
 
+const set_difference = function <T>(set_a: Set<T>, set_b: Set<T>): Set<T> {
+    const result = new Set(set_a);
+    for (const e of set_b) {
+        result.delete(e);
+    }
+    return result;
+}
+
 Object.defineProperty(Set, 'union', {
     value: set_union,
     enumerable: false
@@ -62,6 +72,11 @@ Object.defineProperty(Set, 'union', {
 
 Object.defineProperty(Set, 'intersection', {
     value: set_intersection,
+    enumerable: false
+});
+
+Object.defineProperty(Set, 'diff', {
+    value: set_difference,
     enumerable: false
 });
 

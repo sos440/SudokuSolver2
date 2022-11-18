@@ -1,87 +1,80 @@
-import { SOGame, SOSupergraph, SOVertex } from "./sudoku_original";
-import { History, SOStrategies } from './strat_vanilla';
-import { SVG, PuzzleCanvas } from "./graphics/canvas";
+import { SOEdge, SOGame, SOVertex } from "./math/graph_so";
+import { SOSolver } from './solver_so';
+import { Caretaker, Memento } from "./system/memento";
+import { PuzzleIO } from './system/io';
 
-/** This horrible code below is just a test run. */
+console.log(`Sudoku Solver build 007`);
 
-console.log(`Sudoku Solver build 005 (2022/11/17 15:20)`);
+const div_log = document.getElementById('logs') as HTMLElement;
+const div_puzzle = document.getElementById('puzzle') as HTMLElement;
 
-const game = new SOGame(3);
+/** A Sudoku original game template. */
+const Game = new SOGame(3);
 
-const puzzle_canvas = new PuzzleCanvas();
-puzzle_canvas.canvas.addTo(document.body);
+/** A puzzle canvas to display puzzles. */
+const Editor = new SOSolver(Game);
+Editor.canvas.addTo(div_puzzle);
 
-
-type AnnotatedPuzzle = {
-    puzzle: SOSupergraph;
-    clues?: Set<SOVertex>;
-    determined?: Set<SOVertex>;
-}
-
-const print_puzzle = (anotpuzzle: AnnotatedPuzzle): void => {
-    const puzzle = anotpuzzle.puzzle;
-    const clues = anotpuzzle.clues ?? new Set<SOVertex>();
-    const determined = anotpuzzle.determined ?? new Set<SOVertex>();
-
-    puzzle_canvas.cellTexts.hideAll().clearAll();
-    puzzle_canvas.markRects.hideAll().clearAll();
-    puzzle_canvas.markTexts.hideAll().clearAll();
-
-    for (const index of clues) {
-        (puzzle_canvas.cellTexts.show(Math.trunc(index / 9)) as SVG)
-            .html(`${(index % 9) + 1}`)
-            .attr({ fill: 'blue' });
-    }
-
-    for (const index of determined) {
-        if (clues.has(index)) { continue; }
-        (puzzle_canvas.cellTexts.show(Math.trunc(index / 9)) as SVG)
-            .html(`${(index % 9) + 1}`);
-    }
-
-    for (const index of new Array(729).keys()) {
-        if (!puzzle.VE.rows.has(index) || clues.has(index) || determined.has(index)) { continue; }
-        puzzle_canvas.markTexts.show(index);
-    }
-};
-
+const History = new Caretaker(Editor);
 
 namespace TestRun {
-    const puzzle = game.import('092001750500200008000030200075004960200060075069700030008090020700003089903800040');
+    const vertices = PuzzleIO.import(Game, '001000000920400076000500002000120364007000050000900000000000005008050100019240000');
     console.log('Puzzle has been successfully imported.');
 
+    /** Initialize the editor. */
+    const puzzle = Game.filter((vertex, _) => vertices.has(vertex));
+    const cell_units = puzzle.EG.columns.get('rc') as Set<SOEdge>;
     const clues = Set.union(
         ...puzzle.VE.columns.filter(
-            (edge, vertex_set) => (edge < 81 && vertex_set.size == 1)
+            (edge, vertex_set) => (cell_units.has(edge) && vertex_set.size == 1)
         ).values()
     );
-    const h_seq = SOStrategies.obviousCandidateRemoval({
-        puzzle: puzzle,
-        determined: clues
-    })
 
-    if (h_seq.length > 0) {
-        const puzzle_copy = puzzle.copy();
-        for (const item of h_seq) {
-            for (const action of item.actions) {
-                const query_match = action.query.match(/^unmark (\d+)$/);
-                if (query_match) {
-                    puzzle_copy.VE.deleteRow(parseInt(query_match[1]));
-                }
+    Editor.snapshot.vertices = vertices;
+    Editor.snapshot.clues = clues;
+    Editor.snapshot.determined = clues;
+
+    /** Initialize the history and render the puzzle. */
+    History.init(new Memento('initial|final', {
+        snapshot: Editor.snapshot,
+        logs: ['Puzzle loaded.'],
+        selected: -1
+    }));
+    Editor.render();
+
+    /** Strategy! */
+    const strategy_list = [
+        Editor.obviousCandidateRemoval,
+        Editor.nakedSingle,
+        Editor.hiddenSingle,
+        Editor.intersectionPointing,
+        Editor.intersectionClaiming
+    ];
+
+    const solve_prev = () => {
+        div_log.replaceChildren();
+        History.moveBy(-1);
+        console.log(`At time: ${History.time}`);
+    };
+    
+    const solve_next = () => {
+        div_log.replaceChildren();
+
+        if (History.atEnd()) {
+            const vertices = Editor.snapshot.vertices as Set<SOVertex>;
+            const puzzle = Game.filter((vertex, _) => vertices.has(vertex));
+            for (const strategy of strategy_list) {
+                const pmem_seg = strategy.call(Editor, puzzle);
+                if (pmem_seg.length == 0) { continue; }
+                History.addSegment(pmem_seg);
+                break;
             }
         }
-        puzzle_copy.EG = puzzle_copy.EG.filter((edge, _) => puzzle_copy.VE.columns.has(edge));
-        print_puzzle({
-            puzzle: puzzle_copy,
-            clues: clues
-        });
-    }
-    else {
-        print_puzzle({
-            puzzle: puzzle,
-            clues: clues
-        });
-    }
 
-    puzzle_canvas.markRects.show(3)?.attr({ fill: 'yellow', stroke: 'red', 'stroke-width': 1 });
+        History.moveBy(1);
+        console.log(`At time: ${History.time}`);
+    };
+
+    document.getElementById('prev')?.addEventListener('click', solve_prev);
+    document.getElementById('next')?.addEventListener('click', solve_next);
 }
