@@ -8,9 +8,16 @@
 
 <body>
     <nav>
-        <button id="prev">Prev</button>
-        <button id="next">Next</button>
-        <button id="export">Export</button>
+        <div>
+            <button id="prev">Prev</button>
+            <button id="next">Next</button>
+            <button id="export">Export</button>
+            <select id="samples"></select>
+            <button id="import">Import</button>
+        </div>
+        <div>
+            <input id="cmd" type="text" size="50" /><button id="apply_cmd">Apply</button>
+        </div>
     </nav>
     <div id="puzzle"></div>
     <div id="logs"></div>

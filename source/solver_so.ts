@@ -3,8 +3,9 @@
  */
 
 import { Originator, Memento, PartialMemento } from "./system/memento";
-import { SOVertex, SOEdge, SOSupergraph, SOGroup, SOGame } from "./math/graph_so";
+import { SOVertex, SOEdge, SOSupergraph, SOGroup, SOGame, SOGridCd, SOVertexAd, SOType } from "./math/graph_so";
 import { PuzzleCanvasSnapshot, PuzzleCanvas, Attributes, SVG } from "./graphics/canvas";
+import { BaseN, multirange, range } from "./tools";
 
 
 export class SOSolver extends Originator {
@@ -48,6 +49,7 @@ export class SOSolver extends Originator {
         this.canvas.cellTexts.hideAll().clearAll();
         this.canvas.markRects.hideAll().clearAll();
         this.canvas.markTexts.hideAll().clearAll();
+        this.canvas.drawing.html('');
 
         /** Renders each cell. */
         for (const edge of puzzle.EG.columns.get('rc') as Set<SOEdge>) {
@@ -93,12 +95,47 @@ export class SOSolver extends Originator {
                 if (type == 'mark') {
                     this.canvas.markRects.show(index)?.attr(o[`rect:${class_name}`]);
                     this.canvas.markTexts.get(index)?.attr(o[`text:${class_name}`]);
+                    if (class_name == 'removed') {
+                        const mark_elem = (this.canvas.markRects.get(index) as SVG).element;
+                        const x = mark_elem.getAttribute('x');
+                        const y = mark_elem.getAttribute('y');
+                        const w = mark_elem.getAttribute('width');
+                        const h = mark_elem.getAttribute('height');
+                        this.canvas.drawing
+                            .path({ 'd': `M ${x} ${y} l ${w} ${h} m -${w} 0 l ${w} -${h}` })
+                            .attr({ 'stroke': 'red' })
+                    }
                 }
                 else if (type == 'cell' || type == 'rc') {
                     this.canvas.cellRects.show(index)?.attr(o[`rect:${class_name}`]);
                     this.canvas.cellTexts.get(index)?.attr(o[`text:${class_name}`]);
                 }
-                else if (type == 'rk' || type == 'ck' || type == 'bk') {
+                else if (type == 'row') {
+                    const row = index;
+                    for (const col of range(this.game.D1)) {
+                        const cell_id = BaseN.fromD([row, col], this.game.D1);
+                        this.canvas.cellRects.show(cell_id)?.attr(o[`rect:${class_name}`]);
+                        this.canvas.cellTexts.get(cell_id)?.attr(o[`text:${class_name}`]);
+                    }
+                }
+                else if (type == 'col') {
+                    const col = index;
+                    for (const row of range(this.game.D1)) {
+                        const cell_id = BaseN.fromD([row, col], this.game.D1);
+                        this.canvas.cellRects.show(cell_id)?.attr(o[`rect:${class_name}`]);
+                        this.canvas.cellTexts.get(cell_id)?.attr(o[`text:${class_name}`]);
+                    }
+                }
+                else if (type == 'box') {
+                    const a = BaseN.toD(index, 2, this.game.Dp);
+                    for (const b of multirange(this.game.Dp, this.game.Dp)) {
+                        const cell_id = BaseN.fromD([a[0], b[0], a[1], b[1]], this.game.Dp);
+                        this.canvas.cellRects.show(cell_id)?.attr(o[`rect:${class_name}`]);
+                        this.canvas.cellTexts.get(cell_id)?.attr(o[`text:${class_name}`]);
+                    }
+                }
+                /** @depreciated Legacy code. */
+                else if (type == 'rk' || type == 'ck' || type == 'bk' || type == '*k') {
                     this.game['V($e)'](index)?.forEach((vertex) => {
                         const index_rc = Math.trunc(vertex / this.game.D1);
                         this.canvas.cellRects.show(index_rc)?.attr(o[`rect:${class_name}`]);
@@ -196,28 +233,29 @@ export class SOSolver extends Originator {
         const pz = puzzle;
         const vertices = new Set<SOVertex>(this.snapshot.vertices);
         const determined = new Set(this.snapshot.determined);
-        const annote_based = new Array<string>();
-        const annote_removed = new Array<string>();
+        const annote_rem = new Array<string>();
+        const annote_det = new Array<string>();
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
                 logs: [`updated by hidden single`],
                 snapshot: {
-                    annotations: annote_based
+                    annotations: annote_rem
                 }
             },
             {
                 type: 'middle',
                 logs: [],
                 snapshot: {
-                    annotations: annote_removed
+                    vertices: vertices,
+                    determined: determined,
+                    annotations: annote_det
                 }
             },
             {
                 type: 'final',
                 logs: [],
                 snapshot: {
-                    vertices: vertices,
                     annotations: []
                 }
             }
@@ -234,18 +272,22 @@ export class SOSolver extends Originator {
                 if (determined.has(first_vertex)) { continue; }
 
                 const visibles = pz.visibleFrom(first_vertex, 'rc');
-                if (visibles.size == 0){ continue; } /** This condition means that the vertex is a NS. */
+                if (visibles.size == 0) { continue; } /** This condition means that the vertex is a NS. */
 
                 /** If a hidden single has been found. */
                 h_seg[0].logs?.push(`log "Vertex ${first_vertex} is a hidden single in the ${group} containing it."`);
-                annote_based.push(`highlight mark ${first_vertex} as determined`);
-                annote_based.push(`highlight ${group} ${edge} as based`);
+                annote_rem.push(`highlight mark ${first_vertex} as determined`);
+                annote_rem.push(`highlight ${group} ${edge} as based`);
+                annote_rem.push(`highlight cell ${Math.trunc(first_vertex / this.game.D1)} as intersect`);
+
+                determined.add(first_vertex);
+                annote_det.push(`highlight cell ${Math.trunc(first_vertex / this.game.D1)} as determined`);
 
                 /** Loops through the vertices visible from the hidden single. */
                 for (const index_targ of visibles) {
                     vertices.delete(index_targ);
                     h_seg[1].logs?.push(`log "Vertex ${index_targ} is in the same unit as the hidden single, hence is removed."`);
-                    annote_removed.push(`highlight mark ${index_targ} as removed`);
+                    annote_rem.push(`highlight mark ${index_targ} as removed`);
                 }
 
                 return h_seg;
@@ -260,21 +302,13 @@ export class SOSolver extends Originator {
     intersectionPointing(puzzle: SOSupergraph): PartialMemento[] {
         const pz = puzzle;
         const vertices = new Set<SOVertex>(this.snapshot.vertices);
-        const annote_based = new Array<string>();
-        const annote_removed = new Array<string>();
+        const annotations = new Array<string>();
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
                 logs: [`updated by intersection (pointing)`],
                 snapshot: {
-                    annotations: annote_based
-                }
-            },
-            {
-                type: 'middle',
-                logs: [],
-                snapshot: {
-                    annotations: annote_removed
+                    annotations: annotations
                 }
             },
             {
@@ -287,40 +321,39 @@ export class SOSolver extends Originator {
             }
         ];
 
-        console.time('bm1');
+        for (const [line_ad, line, box_ad, box] of this.game.loopLineBox()) {
+            const vset_box = pz['V($e)'](box) as Set<SOVertex>;
+            const vset_line = pz['V($e)'](line) as Set<SOVertex>;
+            const vset_band = Set.intersection(vset_box, vset_line);
 
-        /** Loop through rows/columns to find a locked configuration: */
-        for (const group of ['rk', 'ck'] as SOGroup[]) {
-            for (const edge of pz['E($g)'](group) as Set<SOEdge>) {
-                const box = [...pz['E(V($e))&E($g)'](edge, 'bk')][0];
-                const vertex_set_box = pz['V($e)'](box) as Set<SOVertex>;
-                const vertex_set_line = pz['V($e)'](edge) as Set<SOVertex>;
-                const vertex_set_band = Set.intersection(vertex_set_box, vertex_set_line);
-                
-                if (vertex_set_box.size > vertex_set_band.size){ continue; }
-                if (vertex_set_line.size == vertex_set_band.size){ continue; }
+            if (vset_box.size > vset_band.size) { continue; }
+            if (vset_line.size == vset_band.size) { continue; }
 
-                /** If a hidden single has been found. */
-                h_seg[0].logs?.push(`log "Vertices ${[...vertex_set_band]} form a pointer in the box containing it."`);
-                vertex_set_band.forEach((vertex) => {
-                    annote_based.push(`highlight mark ${vertex} as determined`);
-                });
-                annote_based.push(`highlight ${group} ${edge} as affected`);
-                annote_based.push(`highlight bk ${box} as based`);
+            /** If a hidden single has been found. */
+            h_seg[0].logs?.push(`log "Vertices ${[...vset_band]} form a pointer in ${line_ad.type} ${line_ad.cd1 + 1}."`);
 
-                /** Loops through the vertices visible from the hidden single. */
-                for (const index_targ of Set.diff(vertex_set_line, vertex_set_band)) {
-                    vertices.delete(index_targ);
-                    h_seg[1].logs?.push(`log "Vertex ${index_targ} is outside of the box and pointed by the pointer."`);
-                    annote_removed.push(`highlight mark ${index_targ} as removed`);
-                }
+            vset_band.forEach((vertex) => {
+                annotations.push(`highlight mark ${vertex} as determined`);
+            });
 
-                return h_seg;
+            annotations.push(`highlight ${line_ad.type} ${line_ad.cd1} as affected`);
+            annotations.push(`highlight box ${box_ad.cd1} as based`);
+            Set.intersection(
+                this.game['V($e)'](box) as Set<SOVertex>,
+                this.game['V($e)'](line) as Set<SOVertex>
+            ).forEach((vertex) => {
+                annotations.push(`highlight cell ${this.game.adV.get(vertex)?.rc} as intersect`);
+            });
+
+            /** Loops through the vertices visible from the hidden single. */
+            for (const index_targ of Set.diff(vset_line, vset_band)) {
+                vertices.delete(index_targ);
+                h_seg[1].logs?.push(`log "Vertex ${index_targ} in box ${box_ad.cd1 + 1} is erased by the pointer."`);
+                annotations.push(`highlight mark ${index_targ} as removed`);
             }
-        }
 
-        console.timeLog('bm1');
-        console.timeEnd('bm1');
+            return h_seg;
+        }
 
         return [];
     }
@@ -330,21 +363,13 @@ export class SOSolver extends Originator {
     intersectionClaiming(puzzle: SOSupergraph): PartialMemento[] {
         const pz = puzzle;
         const vertices = new Set<SOVertex>(this.snapshot.vertices);
-        const annote_based = new Array<string>();
-        const annote_removed = new Array<string>();
+        const annotations = new Array<string>();
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
                 logs: [`updated by intersection (pointing)`],
                 snapshot: {
-                    annotations: annote_based
-                }
-            },
-            {
-                type: 'middle',
-                logs: [],
-                snapshot: {
-                    annotations: annote_removed
+                    annotations: annotations
                 }
             },
             {
@@ -357,36 +382,200 @@ export class SOSolver extends Originator {
             }
         ];
 
-        /** Loop through rows/columns to find a locked configuration: */
-        for (const group of ['rk', 'ck'] as SOGroup[]) {
-            for (const edge of pz['E($g)'](group) as Set<SOEdge>) {
-                const box = [...pz['E(V($e))&E($g)'](edge, 'bk')][0];
-                const vertex_set_box = pz['V($e)'](box) as Set<SOVertex>;
-                const vertex_set_line = pz['V($e)'](edge) as Set<SOVertex>;
-                const vertex_set_band = Set.intersection(vertex_set_box, vertex_set_line);
-                
-                if (vertex_set_box.size == vertex_set_band.size){ continue; }
-                if (vertex_set_line.size > vertex_set_band.size){ continue; }
+        for (const [line_ad, line, box_ad, box] of this.game.loopLineBox()) {
+            const vset_box = pz['V($e)'](box) as Set<SOVertex>;
+            const vset_line = pz['V($e)'](line) as Set<SOVertex>;
+            const vset_band = Set.intersection(vset_box, vset_line);
 
-                /** If a hidden single has been found. */
-                h_seg[0].logs?.push(`log "Vertices ${[...vertex_set_line]} form a clamer in the line containing it."`);
-                vertex_set_band.forEach((vertex) => {
-                    annote_based.push(`highlight mark ${vertex} as determined`);
-                });
-                annote_based.push(`highlight bk ${box} as affected`);
-                annote_based.push(`highlight ${group} ${edge} as based`);
+            if (vset_line.size > vset_band.size) { continue; }
+            if (vset_box.size == vset_band.size) { continue; }
 
-                /** Loops through the vertices visible from the hidden single. */
-                for (const index_targ of Set.diff(vertex_set_box, vertex_set_band)) {
-                    vertices.delete(index_targ);
-                    h_seg[1].logs?.push(`log "Vertex ${index_targ} is outside of the box and pointed by the pointer."`);
-                    annote_removed.push(`highlight mark ${index_targ} as removed`);
-                }
+            /** If a hidden single has been found. */
+            h_seg[0].logs?.push(`log "Vertices ${[...vset_band]} form a claimer in ${line_ad.type} ${line_ad.cd1 + 1}."`);
 
-                return h_seg;
+            vset_band.forEach((vertex) => {
+                annotations.push(`highlight mark ${vertex} as determined`);
+            });
+
+            annotations.push(`highlight box ${box_ad.cd1} as affected`);
+            annotations.push(`highlight ${line_ad.type} ${line_ad.cd1} as based`);
+            Set.intersection(
+                this.game['V($e)'](box) as Set<SOVertex>,
+                this.game['V($e)'](line) as Set<SOVertex>
+            ).forEach((vertex) => {
+                annotations.push(`highlight cell ${this.game.adV.get(vertex)?.rc} as intersect`);
+            });
+
+            /** Loops through the vertices visible from the hidden single. */
+            for (const index_targ of Set.diff(vset_box, vset_band)) {
+                vertices.delete(index_targ);
+                h_seg[1].logs?.push(`log "Vertex ${index_targ} in box ${box_ad.cd1 + 1} is erased by the claimer."`);
+                annotations.push(`highlight mark ${index_targ} as removed`);
             }
+
+            return h_seg;
         }
 
         return [];
+    }
+
+
+    /** Naked Subset Generator */
+    nakedSubsetGenerator(subset_size: number) {
+        if (!Number.isInteger(subset_size) || subset_size < 2 || subset_size > 4) {
+            throw RangeError(`Invalid range of parameter.`);
+        }
+
+        const subset_type = new Map(
+            [[2, 'pair'], [3, 'triple'], [4, 'quad']]
+        ).get(subset_size) as string;
+
+        return (puzzle: SOSupergraph): PartialMemento[] => {
+            const pz = puzzle;
+            const vertices = new Set<SOVertex>(this.snapshot.vertices);
+            const annotations = new Array<string>();
+            const h_seg: PartialMemento[] = [
+                {
+                    type: 'initial',
+                    logs: [`updated by naked ${subset_type}`],
+                    snapshot: {
+                        annotations: annotations
+                    }
+                },
+                {
+                    type: 'final',
+                    logs: [],
+                    snapshot: {
+                        vertices: vertices,
+                        annotations: []
+                    }
+                }
+            ];
+
+            for (const [cell_set, unit_set, unit_ad] of this.game.loopCellUnit()) {
+                /** Only takes cells with multiple candidates. */
+                const cell_set_f = cell_set.filter(
+                    (cell) => (pz['V($e)'](cell) as Set<SOVertex>).size > 1
+                );
+
+                /** Constructs a map (cell) => (keys on the cell) for multivaled cells. */
+                const ck_map = this.game.projAsMap(pz, new Set<SOEdge>(cell_set_f), 'key');
+
+                /** Scan through subsets of {subset_size} cells: */
+                for (const subsets of new Set<SOEdge>(cell_set_f).subsets(subset_size)) {
+                    /** Computes the number of keys in the subset. */
+                    const keys = Set.union(...subsets.map((cell) => ck_map.get(cell) as Set<number>));
+                    if (keys.size > subset_size) { continue; }
+
+                    /** Computes the vertices in each of strong/weak set of edges. */
+                    const v_strong = pz['V(${e})'](subsets);
+                    const v_weak = pz['V(${e})'](keys.map((key) => unit_set[key]));
+                    const v_weakonly = Set.diff(v_weak, v_strong);
+                    if (v_weakonly.size == 0) { continue; }
+
+                    /** Creates a report. */
+                    h_seg[0].logs?.push(`log "Cells ${[...subsets]} form a naked ${subset_type}."`);
+                    v_strong.forEach((vertex) => {
+                        annotations.push(`highlight mark ${vertex} as determined`);
+                    });
+                    annotations.push(`highlight ${unit_ad.type} ${unit_ad.cd1} as affected`);
+                    subsets.forEach((cell) => {
+                        annotations.push(`highlight cell ${cell} as intersect`);
+                    })
+
+                    /** Loops through the vertices visible from the hidden single. */
+                    for (const index_targ of v_weakonly) {
+                        vertices.delete(index_targ);
+                        h_seg[1].logs?.push(`log "Vertex ${index_targ} is erased."`);
+                        annotations.push(`highlight mark ${index_targ} as removed`);
+                    }
+
+                    return h_seg;
+                }
+            }
+
+            return [];
+        };
+    }
+
+
+    /** Naked Subset Generator */
+    hiddenSubsetGenerator(subset_size: number) {
+        if (!Number.isInteger(subset_size) || subset_size < 2 || subset_size > 4) {
+            throw RangeError(`Invalid range of parameter.`);
+        }
+
+        const subset_type = new Map(
+            [[2, 'pair'], [3, 'triple'], [4, 'quad']]
+        ).get(subset_size) as string;
+
+        return (puzzle: SOSupergraph): PartialMemento[] => {
+            const pz = puzzle;
+            const vertices = new Set<SOVertex>(this.snapshot.vertices);
+            const annotations = new Array<string>();
+            const h_seg: PartialMemento[] = [
+                {
+                    type: 'initial',
+                    logs: [`updated by hidden ${subset_type}`],
+                    snapshot: {
+                        annotations: annotations
+                    }
+                },
+                {
+                    type: 'final',
+                    logs: [],
+                    snapshot: {
+                        vertices: vertices,
+                        annotations: []
+                    }
+                }
+            ];
+
+            for (const [cell_set, unit_set, unit_ad] of this.game.loopCellUnit()) {
+                /** Only takes units with multiple candidates. */
+                const unit_set_f = unit_set.filter(
+                    (cell) => (pz['V($e)'](cell) as Set<SOVertex>).size > 1
+                );
+
+                /** Constructs a map (unit) => (cd_perp) for multivaled cells. */
+                const cd_type_perp = unit_ad.typePerp as keyof SOVertexAd;
+                const uc_map = this.game.projAsMap(pz, new Set<SOEdge>(unit_set_f), cd_type_perp);
+
+                /** Scan through subsets of {subset_size} cells: */
+                for (const subsets of new Set<SOEdge>(unit_set_f).subsets(subset_size)) {
+                    /** Computes the number of keys in the subset. */
+                    const cd_perps = Set.union(...subsets.map((unit) => uc_map.get(unit) as Set<number>));
+                    if (cd_perps.size > subset_size) { continue; }
+
+                    /** Computes the vertices in each of strong/weak set of edges. */
+                    const hidden_cells = cd_perps.map((cd) => cell_set[cd]);
+                    const v_strong = pz['V(${e})'](subsets);
+                    const v_weak = pz['V(${e})'](hidden_cells);
+                    const v_weakonly = Set.diff(v_weak, v_strong);
+                    if (v_weakonly.size == 0) { continue; }
+
+                    /** Creates a report. */
+                    h_seg[0].logs?.push(`log "Cells ${[...hidden_cells]} form a hidden ${subset_type}."`);
+                    v_strong.forEach((vertex) => {
+                        annotations.push(`highlight mark ${vertex} as determined`);
+                    });
+                    annotations.push(`highlight ${unit_ad.type} ${unit_ad.cd1} as based`);
+                    hidden_cells.forEach((cell) => {
+                        annotations.push(`highlight cell ${cell} as intersect`);
+                    })
+
+                    /** Loops through the vertices visible from the hidden single. */
+                    for (const index_targ of v_weakonly) {
+                        vertices.delete(index_targ);
+                        h_seg[1].logs?.push(`log "Vertex ${index_targ} is erased."`);
+                        annotations.push(`highlight mark ${index_targ} as removed`);
+                    }
+
+                    return h_seg;
+                }
+            }
+
+            return [];
+        };
     }
 }

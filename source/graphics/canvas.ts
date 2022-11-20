@@ -2,7 +2,7 @@
  * @module canvas
  */
 
-import { MDIterator } from "../tools";
+import { mergiter, multirange, range } from "../tools";
 
 
 /** Represents a puzzle augmented with annotations. */
@@ -25,6 +25,12 @@ export class SVG {
     element: SVGElement;
     constructor(tag_name: string, attr?: Attributes) {
         this.element = document.createElementNS('http://www.w3.org/2000/svg', tag_name);
+        if (tag_name == 'svg'){
+            this.attr({
+                'xmlns': 'http://www.w3.org/2000/svg',
+                'xmlns:xlink': 'http://www.w3.org/1999/xlink'
+            })
+        }
         return this.attr(attr);
     }
 
@@ -182,6 +188,7 @@ export class PuzzleCanvas extends SVG {
     cellTexts: SVGGroup;
     markRects: SVGGroup;
     markTexts: SVGGroup;
+    drawing: SVG;
     constructor(options: Attributes = {}) {
         super('svg');
         const o = PuzzleCanvas.computeStyle(options) as Attributes;
@@ -227,7 +234,7 @@ export class PuzzleCanvas extends SVG {
         const cell_dw = o['cell-size'];
         this.cellRects = new SVGGroup(this.g({ id: 'cell_rect', fill: 'white' }));
         this.cellTexts = new SVGGroup(this.g({ id: 'cell_text' }).attr(o['cell-font']));
-        for (const [x, y] of MDIterator([cols, rows])) {
+        for (const [x, y] of multirange(rows, cols)) {
             const index = y * cols + x;
             const pos = PuzzleCanvas.cellXY(x, y, o);
             this.cellRects.set(
@@ -244,7 +251,7 @@ export class PuzzleCanvas extends SVG {
         const mark_dw = o['mark-size'];
         this.markRects = new SVGGroup(this.g({ id: 'mark_rect' }));
         this.markTexts = new SVGGroup(this.g({ id: 'mark_text' }).attr(o['mark-font']));
-        for (const [x, y, key] of MDIterator([cols, rows, D1])) {
+        for (const [x, y, key] of multirange(cols, rows, D1)) {
             const index = (y * cols + x) * D1 + key;
             const pos = PuzzleCanvas.markXY(x, y, key, o);
             this.markRects.set(
@@ -259,6 +266,9 @@ export class PuzzleCanvas extends SVG {
             );
         }
 
+        this.drawing = this.g({ id: 'drawing' });
+
+        /** Finalize */
         this.cellRects.showAll();
         this.style = o;
     }
@@ -402,13 +412,18 @@ export class PuzzleCanvas extends SVG {
             'stroke-width': 0.75
         },
         'rect:based': {
+            'fill': '#00CED1', /** DarkTurquoise */
+            'stroke': '#2F4F4F', /** DarkSlateGrey */
+            'stroke-width': 0.75
+        },
+        'rect:intersect': {
             'fill': '#73b2ff',
             'stroke': 'blue',
             'stroke-width': 0.75
         },
         'rect:affected': {
-            'fill': 'lime',
-            'stroke': 'green',
+            'fill': 'pink',
+            'stroke': 'red',
             'stroke-width': 0.75
         },
 
@@ -418,6 +433,7 @@ export class PuzzleCanvas extends SVG {
         'text:determined': {
             'fill': 'blue'
         },
+        'text:intersect': {},
         'text:based': {},
         'text:affected': {},
     }

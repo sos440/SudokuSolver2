@@ -74,6 +74,11 @@ export class Caretaker {
         return (this.time == this.history.length - 1);
     }
 
+    /** Returns the current memento. */
+    now(): Memento | null {
+        return this.history[this.time] ?? null;
+    }
+
     /** Returns the last memento. */
     last(): Memento | null {
         return this.history[this.history.length - 1] ?? null;
@@ -91,9 +96,7 @@ export class Caretaker {
 
     /** Initialize the caretaker. */
     init(pmem: Memento): void {
-        if (this.history.length > 0){
-            throw Error(`You cannot initialize the history twice.`);
-        }
+        this.history = [];
         this.history.push(pmem);
         this.time = 0;
     }

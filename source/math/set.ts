@@ -88,6 +88,8 @@ declare global {
         filter(test: (e: T, set?: Set<T>) => boolean): Set<T>;
         /** Creates a new Set by applying the map to each element. */
         map<U>(transform: (e: T, set?: Set<T>) => U): Set<U>;
+        /** Loops through the family of subsets of the specified size. */
+        subsets(size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>>;
     }
 }
 
@@ -109,6 +111,31 @@ const set_map = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) =>
     return result;
 };
 
+const set_subsets = function* <T>(this: Set<T>, size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>> {
+    if (size > this.size || size < 0){
+        return;
+    }
+    else if (size == 0){
+        yield new Set<T>();
+        return;
+    }
+    else if (size == this.size){
+        yield new Set<T>(this);
+        return;
+    }
+
+    prev_list = prev_list ?? [...this.values()];
+    for (let i = 0; i < prev_list.length; i++){
+        const cur_set = new Set<T>(prev_set).add(prev_list[i]);
+        if (size == 1){
+            yield cur_set;
+        }
+        else {
+            yield* this.subsets(size - 1, cur_set, prev_list.slice(i + 1));
+        }
+    }
+};
+
 Object.defineProperty(Set.prototype, 'filter', {
     value: set_filter,
     enumerable: false
@@ -116,6 +143,11 @@ Object.defineProperty(Set.prototype, 'filter', {
 
 Object.defineProperty(Set.prototype, 'map', {
     value: set_map,
+    enumerable: false
+});
+
+Object.defineProperty(Set.prototype, 'subsets', {
+    value: set_subsets,
     enumerable: false
 });
 
