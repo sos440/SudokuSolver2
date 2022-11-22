@@ -36,6 +36,7 @@ namespace TestRun {
         Editor.snapshot.clues = clues;
         Editor.snapshot.determined = clues;
         Editor.snapshot.pencilmarked = new Set<SOEdge>();
+        Editor.snapshot.annotations = [];
 
         /** Initialize the history and render the puzzle. */
         History.init(new Memento('initial|final', {
@@ -54,10 +55,10 @@ namespace TestRun {
         Editor.intersectionPointing,
         Editor.intersectionClaiming,
         Editor.nakedSubsetGenerator(2),
-        Editor.hiddenSubsetGenerator(2),
         Editor.nakedSubsetGenerator(3),
-        Editor.hiddenSubsetGenerator(3),
+        Editor.hiddenSubsetGenerator(2),
         Editor.nakedSubsetGenerator(4),
+        Editor.hiddenSubsetGenerator(3),
         Editor.hiddenSubsetGenerator(4)
     ];
 
