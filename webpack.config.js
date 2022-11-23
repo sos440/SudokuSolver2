@@ -4,7 +4,7 @@ module.exports = {
     entry: './source/index.ts',
     mode: 'production',
     output: {
-        path: path.resolve(__dirname, 'product'),
+        path: path.resolve(__dirname, 'product')
     },
     plugins: [
         // Add your plugins here

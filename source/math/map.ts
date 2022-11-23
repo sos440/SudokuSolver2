@@ -8,7 +8,7 @@ type mergeable<Key, Value> = Value | Set<Value> | Map<Key, Value>;
 
 /** Static properties of Map */
 declare global {
-    interface MapConstructor {
+    export interface MapConstructor {
         /** Merge two collection-valued Maps. */
         merge<K, K2, V>(x: Map<K, mergeable<K2, V>>, y: Map<K, mergeable<K2, V>>): Map<K, mergeable<K2, V>>;
     }
@@ -53,7 +53,7 @@ Object.defineProperty(Map, 'merge', {
 
 /** Local properties of Map */
 declare global {
-    interface Map<K, V> {
+    export interface Map<K, V> {
         /** Creates a new Map consisting of all key-value pairs that pass the test. */
         filter(test: (key: K, value: V, map?: Map<K, V>) => boolean): Map<K, V>;
         /** Creates a new Map by applying the map to each value of the key-value pair. */
@@ -115,4 +115,4 @@ Object.defineProperty(Map.prototype, 'clearEmptyKeys', {
 
 
 /** Make typescript recognize this as a module. */
-export { };
+export {};

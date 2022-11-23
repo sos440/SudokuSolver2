@@ -5,7 +5,7 @@
 
 /** Static properties of Set */
 declare global {
-    interface SetConstructor {
+    export interface SetConstructor {
         /** Computes the union of the two Sets. */
         union<T>(...sets: Set<T>[]): Set<T>;
         /** Computes the intersection of the two Sets. */
@@ -83,13 +83,17 @@ Object.defineProperty(Set, 'diff', {
 
 /** Local properties of Set */
 declare global {
-    interface Set<T> {
+    export interface Set<T> {
         /** Creates a new Set consisting of all elements that pass the test. */
         filter(test: (e: T, set?: Set<T>) => boolean): Set<T>;
         /** Creates a new Set by applying the map to each element. */
         map<U>(transform: (e: T, set?: Set<T>) => U): Set<U>;
         /** Loops through the family of subsets of the specified size. */
         subsets(size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>>;
+        /** Returns true if every element of the Set passes the test, or false otherwise. */
+        every(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean;
+        /** Returns true if some element of the Set passes the test, or false otherwise. */
+        some(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean;
     }
 }
 
@@ -112,28 +116,46 @@ const set_map = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) =>
 };
 
 const set_subsets = function* <T>(this: Set<T>, size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>> {
-    if (size > this.size || size < 0){
+    if (size > this.size || size < 0) {
         return;
     }
-    else if (size == 0){
+    else if (size == 0) {
         yield new Set<T>();
         return;
     }
-    else if (size == this.size){
+    else if (size == this.size) {
         yield new Set<T>(this);
         return;
     }
 
     prev_list = prev_list ?? [...this.values()];
-    for (let i = 0; i < prev_list.length; i++){
+    for (let i = 0; i < prev_list.length; i++) {
         const cur_set = new Set<T>(prev_set).add(prev_list[i]);
-        if (size == 1){
+        if (size == 1) {
             yield cur_set;
         }
         else {
             yield* this.subsets(size - 1, cur_set, prev_list.slice(i + 1));
         }
     }
+};
+
+const set_every = function <T>(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean {
+    for (const e of this) {
+        if (!test(e, this)) {
+            return false;
+        }
+    }
+    return true;
+};
+
+const set_some = function <T>(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean {
+    for (const e of this) {
+        if (test(e, this)) {
+            return true;
+        }
+    }
+    return false;
 };
 
 Object.defineProperty(Set.prototype, 'filter', {
@@ -151,6 +173,16 @@ Object.defineProperty(Set.prototype, 'subsets', {
     enumerable: false
 });
 
+Object.defineProperty(Set.prototype, 'every', {
+    value: set_every,
+    enumerable: false
+});
+
+Object.defineProperty(Set.prototype, 'some', {
+    value: set_some,
+    enumerable: false
+});
+
 
 /** To make Typescript recognize this is indeed a module. */
-export { };
+export {};

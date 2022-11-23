@@ -1,4 +1,4 @@
-import { FormatOptions } from "./system/io";
+import { FormatOptions } from "./basic/io";
 
 export type DatabaseItem = {
     format: FormatOptions;
@@ -55,6 +55,11 @@ export const database: DatabaseItem[] = [
     {
         format: 'simple',
         data: '009032000000700000162000000010020560000900000050000107000000403026009000005870000',
-        desc: 'Hidden pair example.'
+        desc: 'Hidden pair 1 example.'
+    },
+    {
+        format: 'simple',
+        data: '500010003006003002003200000002300076000050000190007500000009400200800600900040005',
+        desc: 'Swordfish example 1 from SudokuWiki.'
     }
 ];

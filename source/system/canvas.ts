@@ -2,8 +2,8 @@
  * @module canvas
  */
 
-import { mergiter, multirange, range } from "../tools";
-
+import '../math/math';
+import { multirange } from "../basic/tools";
 
 /** Represents a puzzle augmented with annotations. */
 export interface PuzzleCanvasSnapshot {
@@ -25,7 +25,7 @@ export class SVG {
     element: SVGElement;
     constructor(tag_name: string, attr?: Attributes) {
         this.element = document.createElementNS('http://www.w3.org/2000/svg', tag_name);
-        if (tag_name == 'svg'){
+        if (tag_name == 'svg') {
             this.attr({
                 'xmlns': 'http://www.w3.org/2000/svg',
                 'xmlns:xlink': 'http://www.w3.org/1999/xlink'

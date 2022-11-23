@@ -1,16 +1,20 @@
-import { SOEdge, SOGame, SOVertex } from "./math/graph_so";
-import { SOSolver } from './solver_so';
+/**
+ * Main.
+ */
+import './math/math';
+import { SOEdgeID, SOPuzzle, SOVertexID } from "./so_graph";
+import { SOSolver } from './so_solver';
 import { Caretaker, Memento } from "./system/memento";
-import { FormatOptions, PuzzleIO } from './system/io';
+import { FormatOptions, SOGameIO } from './basic/io';
 import { database as Database } from './database';
 
-console.log(`Sudoku Solver build 008`);
+console.log(`Sudoku Solver build 009`);
 
 const div_log = document.getElementById('logs') as HTMLElement;
 const div_puzzle = document.getElementById('puzzle') as HTMLElement;
 
 /** A Sudoku original game template. */
-const Game = new SOGame(3);
+const Game = new SOPuzzle(3);
 
 /** A puzzle canvas to display puzzles. */
 const Editor = new SOSolver(Game);
@@ -20,22 +24,19 @@ const History = new Caretaker(Editor);
 
 namespace TestRun {
     const loadPuzzle = (input: string, format: FormatOptions = 'base64') => {
-        const vertices = PuzzleIO.import(Game, input, format);
-        console.log('Puzzle has been successfully imported.');
+        const v_ids = SOGameIO.import(Game, input, format);
 
         /** Initialize the editor. */
-        const puzzle = Game.filter((vertex, _) => vertices.has(vertex));
-        const cell_units = puzzle.EG.columns.get('rc') as Set<SOEdge>;
-        const clues = Set.union(
-            ...puzzle.VE.columns.filter(
-                (edge, vertex_set) => (cell_units.has(edge) && vertex_set.size == 1)
-            ).values()
+        const pz = new SOPuzzle(Game.p, v_ids);
+        const v_id_clues = Set.union(...pz.adE['rc']
+            .filter((e) => (e.$['v'].size == 1))
+            .map((e) => e.$['v'].map((v) => v.id))
         );
 
-        Editor.snapshot.vertices = vertices;
-        Editor.snapshot.clues = clues;
-        Editor.snapshot.determined = clues;
-        Editor.snapshot.pencilmarked = new Set<SOEdge>();
+        Editor.snapshot.vertices = v_ids;
+        Editor.snapshot.clues = v_id_clues;
+        Editor.snapshot.determined = v_id_clues;
+        Editor.snapshot.pencilmarked = new Set<SOEdgeID>();
         Editor.snapshot.annotations = [];
 
         /** Initialize the history and render the puzzle. */
@@ -45,6 +46,8 @@ namespace TestRun {
             selected: -1
         }));
         Editor.render();
+
+        console.log('Puzzle has been successfully imported.');
     };
 
     /** Strategy! */
@@ -59,7 +62,10 @@ namespace TestRun {
         Editor.hiddenSubsetGenerator(2),
         Editor.nakedSubsetGenerator(4),
         Editor.hiddenSubsetGenerator(3),
-        Editor.hiddenSubsetGenerator(4)
+        Editor.hiddenSubsetGenerator(4),
+        Editor.fishGenerator(2),
+        Editor.fishGenerator(3),
+        Editor.fishGenerator(4)
     ];
 
     const solve_prev = () => {
@@ -69,13 +75,14 @@ namespace TestRun {
     };
 
     const solve_next = () => {
+        console.time('benchmark');
         div_log.replaceChildren();
 
         if (History.atEnd()) {
-            const vertices = Editor.snapshot.vertices as Set<SOVertex>;
-            const puzzle = Game.filter((vertex, _) => vertices.has(vertex));
+            const v_ids = Editor.snapshot.vertices as Set<SOVertexID>;
+            const pz = new SOPuzzle(Game.p, v_ids);
             for (const strategy of strategy_list) {
-                const pmem_seg = strategy.call(Editor, puzzle);
+                const pmem_seg = strategy.call(Editor, pz);
                 if (pmem_seg.length == 0) { continue; }
                 History.addSegment(pmem_seg);
                 break;
@@ -84,12 +91,13 @@ namespace TestRun {
 
         History.moveBy(1);
         console.log(`At time: ${History.time}`);
+        console.timeEnd('benchmark');
     };
 
     const export_puzzle = () => {
         div_log.replaceChildren();
         div_log.appendChild(
-            document.createTextNode(`base64: ${PuzzleIO.export(Game, (History.now() as Memento).snapshot.vertices as Set<SOVertex>)}`)
+            document.createTextNode(`base64: ${SOGameIO.export(Game, (History.now() as Memento).snapshot.vertices as Set<SOVertexID>)}`)
         );
         /** Copy the image to the clipboard. */
         navigator.clipboard.writeText(`data:image/svg+xml;base64,${btoa(Editor.canvas.element.outerHTML)}`);

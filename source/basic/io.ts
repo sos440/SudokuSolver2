@@ -2,12 +2,10 @@
  * A module for importing and exporting puzzle data.
  */
 import { b64_to_uint8, uint8_to_b64 } from "./base64";
-import { Supergraph } from "../math/graph";
-import { SOGame } from "../math/graph_so";
 
 export type FormatOptions = 'simple' | 'base64';
 
-export class PuzzleIO {
+export class SOGameIO {
     static exportSymbols = [
         '1', '2', '3', '4', '5', '6', '7', '8', '9',
         ...String.fromCharCode(...new Array(26).fill(0).map((_, i) => 0x41 + i)),
@@ -19,22 +17,16 @@ export class PuzzleIO {
 
     /** Converts a formatted string to a vertex list. */
     static import(
-        game: Supergraph<number, number, string>,
+        dims: { D1: number, D2: number, D3: number },
         input: string,
         format: FormatOptions = 'base64'
     ): Set<number> {
-        /** Currently, only 'sudoku original' type is accepted. */
-        if (game.type != 'sudoku original') {
-            throw TypeError(`The game is not a sudoku original.`);
+        if (dims.D1 > SOGameIO.exportSymbols.length) {
+            throw RangeError(`The dimensional parameter 'D1' is too large.`);
         }
 
-        const Dp = (game as SOGame).Dp;
-        const D1 = (game as SOGame).D1;
-        const D2 = (game as SOGame).D2;
-        const D3 = (game as SOGame).D3;
-
         /** Guess the format of the string. */
-        if (input.length == D2) {
+        if (input.length == dims.D2) {
             format = 'simple';
         }
         else if (input.substring(0, 5) == 'data:') {
@@ -44,37 +36,37 @@ export class PuzzleIO {
         /** Parse string */
         if (format == 'simple') {
             /** Build the list of vertices. */
-            const vertex_list: number[] = [];
-            for (const [index_rc, c] of Array.from(input).entries()) {
-                const index0 = index_rc * D1;
+            const v_list: number[] = [];
+            for (const [e_rc_id, c] of Array.from(input).entries()) {
+                const v_id0 = e_rc_id * dims.D1;
                 if (this.importSymbols.has(c)) {
-                    vertex_list.push(index0 + (this.importSymbols.get(c) as number));
+                    v_list.push(v_id0 + (this.importSymbols.get(c) as number));
                 }
                 else {
-                    for (const key of new Array(D1).keys()) {
-                        vertex_list.push(index0 + key);
+                    for (const key of new Array(dims.D1).keys()) {
+                        v_list.push(v_id0 + key);
                     }
                 }
             }
-            return new Set(vertex_list);
+            return new Set(v_list);
         }
         else if (format == 'base64') {
             /** Build the list of indices to include. */
             const compressed = b64_to_uint8(input.substring(5));
-            const vertex_list: number[] = [];
+            const v_list: number[] = [];
             for (const [pos, val] of compressed.entries()) {
-                let index = pos * 8;
+                let v_id = pos * 8;
                 for (let i = 0; i < 8; i++) {
-                    if (index >= D3) {
+                    if (v_id >= dims.D3) {
                         break;
                     }
                     if ((val & (1 << i)) > 0) {
-                        vertex_list.push(index);
+                        v_list.push(v_id);
                     }
-                    index++;
+                    v_id++;
                 }
             }
-            return new Set(vertex_list);
+            return new Set(v_list);
         }
         else {
             const __type_exhausted: never = format;
@@ -88,43 +80,36 @@ export class PuzzleIO {
      * The source must be a subgraph of 'this' HGSudokuVanilla graph.
      */
     static export(
-        game: Supergraph<number, number, string>,
-        vertex_list: Set<number>,
+        dims: { D1: number, D2: number, D3: number },
+        v_set: Set<number>,
         format: FormatOptions = 'base64'
     ): string {
-        /** Currently, only 'sudoku original' type is accepted. */
-        if (game.type != 'sudoku original') {
-            throw TypeError(`The game is not a sudoku original.`);
+        if (dims.D1 > SOGameIO.exportSymbols.length) {
+            throw RangeError(`The dimensional parameter 'D1' is too large.`);
         }
 
-        const Dp = (game as SOGame).Dp;
-        const D1 = (game as SOGame).D1;
-        const D2 = (game as SOGame).D2;
-        const D3 = (game as SOGame).D3;
-
         if (format == 'simple') {
-            const result: string[] = new Array(D2).fill('!');
-            for (const vertex of vertex_list) {
-                const index_rc = Math.trunc(vertex / D1);
-                const key = vertex % D1;
-                if (result[index_rc] == '!') {
-                    result[index_rc] = this.exportSymbols[key];
+            const result: string[] = new Array(dims.D2).fill('!');
+            for (const v_id of v_set) {
+                const e_rc_id = Math.trunc(v_id / dims.D1);
+                const key = v_id % dims.D1;
+                if (result[e_rc_id] == '!') {
+                    result[e_rc_id] = this.exportSymbols[key];
                 }
                 else {
-                    result[index_rc] = '.';
+                    result[e_rc_id] = '.';
                 }
             }
             return result.join('');
         }
         else if (format == 'base64') {
             /** Each 8 candidates are compressed to a single number and stored in this array. */
-            const compressed = new Uint8Array(Math.ceil(D3 / 8));
+            const compressed = new Uint8Array(Math.ceil(dims.D3 / 8));
             for (const pos of compressed.keys()) {
                 /** @type {number} Current character. */
                 let c: number = 0;
                 for (let i = 0; i < 8; i++) {
-                    const index = pos * 8 + i;
-                    if (vertex_list.has(index)) {
+                    if (v_set.has(pos * 8 + i)) {
                         c |= 1 << i;
                     }
                 }

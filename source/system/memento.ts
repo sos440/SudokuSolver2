@@ -2,7 +2,7 @@
  * A module for recording and navigating history.
  */
 
-import { PuzzleCanvasSnapshot } from "../graphics/canvas";
+import { PuzzleCanvasSnapshot } from "./canvas";
 
 /** Represents the editor. */
 export abstract class Originator {
