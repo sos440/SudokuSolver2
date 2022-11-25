@@ -4,19 +4,29 @@
 
 import './math/math';
 import { Originator, Memento, PartialMemento } from "./system/memento";
-import { SOVertexID, SOEdgeID, SOFaceType, SOPuzzle } from "./so_graph";
+import { SOVertexID, SOEdgeID, SOFaceType, SOPuzzle, SOEdge, SOVertex } from "./so_graph";
 import { PuzzleCanvasSnapshot, PuzzleCanvas, Attributes, SVG } from "./system/canvas";
+import { range } from './basic/tools';
+import { MSet } from './math/math';
+
+
+interface PuzzleConsole {
+    log: (cmd: string) => void;
+    clear: () => void;
+}
 
 
 export class SOSolver extends Originator {
     game: SOPuzzle;
     canvas: PuzzleCanvas;
+    console: PuzzleConsole;
     snapshot: PuzzleCanvasSnapshot;
     selected: number;
     constructor(game: SOPuzzle, attr?: Attributes) {
         super();
         this.game = game;
         this.canvas = new PuzzleCanvas(attr);
+        this.console = console;
         this.snapshot = {
             vertices: new Set<SOVertexID>(),
             clues: new Set<SOVertexID>(),
@@ -30,10 +40,15 @@ export class SOSolver extends Originator {
     load(mem: Memento): void {
         this.snapshot = mem.snapshot;
         this.selected = mem.selected;
-        for (const log of mem.logs) {
-            console.log(log);
-        }
+        this.printLogs(mem.logs);
         this.render();
+    }
+
+    printLogs(log_list: string[]): void {
+        this.console.clear();
+        for (const log of log_list) {
+            this.console.log(log);
+        }
     }
 
     render(): void {
@@ -133,7 +148,7 @@ export class SOSolver extends Originator {
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
-                logs: [`updated by obvious candidate removal`],
+                logs: [`title "Obvious Candidate Removal"`],
                 snapshot: {
                     pencilmarked: new Set<SOEdgeID>(pz.adE['rc'].keys()),
                     annotations: grp_cmds
@@ -173,7 +188,7 @@ export class SOSolver extends Originator {
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
-                logs: [`updated by naked single`],
+                logs: [`title "Naked Single"`],
                 snapshot: {
                     determined: v_id_dets,
                     annotations: grp_cmds
@@ -213,7 +228,7 @@ export class SOSolver extends Originator {
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
-                logs: [`updated by hidden single`],
+                logs: [`title "Hidden Single"`],
                 snapshot: {
                     annotations: grp_cmds_rm
                 }
@@ -255,13 +270,13 @@ export class SOSolver extends Originator {
             if (v_visible.size == 0) { continue; }
 
             /** If a hidden single has been found. */
-            h_seg[0].logs?.push(`log "Vertex ${v_first.id} is a hidden single in ${f_proj.type} ${f_proj.id + 1}."`);
+            h_seg[0].logs?.push(`log "#v:${v_first.id} is a hidden single in #${f_proj.type}:${f_proj.id}."`);
             grp_cmds_rm.push(`highlight mark ${v_first.id} as determined`);
             grp_cmds_rm.push(`highlight ${f_proj.type} ${f_proj.id} as based`);
             grp_cmds_rm.push(`highlight cell ${e_cell.id} as intersect`);
             for (const v_targ of v_visible) {
                 v_ids.delete(v_targ.id);
-                h_seg[1].logs?.push(`log "Vertex ${v_targ.id} is in the same unit as the hidden single, hence is removed."`);
+                h_seg[1].logs?.push(`log "#v:${v_targ.id} is in the same unit as the hidden single, hence is removed."`);
                 grp_cmds_rm.push(`highlight mark ${v_targ.id} as removed`);
             }
 
@@ -282,7 +297,7 @@ export class SOSolver extends Originator {
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
-                logs: [`updated by intersection (pointing)`],
+                logs: [`title "Intersection (Pointing)"`],
                 snapshot: {
                     annotations: grp_cmds
                 }
@@ -305,16 +320,16 @@ export class SOSolver extends Originator {
             if (!(vset_box.size == vset_band.size && vset_line.size > vset_band.size)) { continue; }
 
             /** If an intersection pointer has been found. */
-            h_seg[0].logs?.push(`log "The box ${e_box.proj.id + 1} and ${e_line.proj.type} ${e_line.proj.id + 1} are locked."`);
+            h_seg[0].logs?.push(`log "The #box:${e_box.proj.id} and #${e_line.proj.type}:${e_line.proj.id} forms a locked configuration."`);
             grp_cmds.push(`highlight mark ${[...vset_band.map((v) => v.id)]} as determined`);
             grp_cmds.push(`highlight ${e_line.proj.type} ${e_line.proj.id} as affected`);
             grp_cmds.push(`highlight box ${e_box.proj.id} as based`);
             grp_cmds.push(`highlight cell ${[...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)]} as intersect`);
 
-            /** Loops through the vertices visible from the hidden single. */
+            /** Loops through the vertices to be removed. */
             for (const v_targ of Set.diff(vset_line, vset_band)) {
                 v_ids.delete(v_targ.id);
-                h_seg[1].logs?.push(`log "Vertex ${v_targ.id} in ${e_line.proj.type} ${e_box.proj.id + 1} is erased by the pointer."`);
+                h_seg[1].logs?.push(`log "#v:${v_targ.id} in #${e_line.proj.type}:${e_box.proj.id} is erased by the pointer."`);
                 grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
             }
 
@@ -332,7 +347,7 @@ export class SOSolver extends Originator {
         const h_seg: PartialMemento[] = [
             {
                 type: 'initial',
-                logs: [`updated by intersection (pointing)`],
+                logs: [`title "Intersection (Claiming)"`],
                 snapshot: {
                     annotations: grp_cmds
                 }
@@ -357,16 +372,16 @@ export class SOSolver extends Originator {
             }
 
             /** If an intersection claimer has been found. */
-            h_seg[0].logs?.push(`log "The box ${e_box.proj.id + 1} and ${e_line.proj.type} ${e_line.proj.id + 1} are locked."`);
+            h_seg[0].logs?.push(`log "The #box:${e_box.proj.id} and #${e_line.proj.type}:${e_line.proj.id} forms a locked configuration."`);
             grp_cmds.push(`highlight mark ${[...vset_band.map((v) => v.id)]} as determined`);
             grp_cmds.push(`highlight box ${e_box.proj.id} as affected`);
             grp_cmds.push(`highlight ${e_line.proj.type} ${e_line.proj.id} as based`);
             grp_cmds.push(`highlight cell ${[...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)]} as intersect`);
 
-            /** Loops through the vertices visible from the hidden single. */
+            /** Loops through the vertices to be removed. */
             for (const v_targ of Set.diff(vset_box, vset_band)) {
                 v_ids.delete(v_targ.id);
-                h_seg[1].logs?.push(`log "Vertex ${v_targ.id} in box ${e_box.proj.id + 1} is erased by the claimer."`);
+                h_seg[1].logs?.push(`log "#v:${v_targ.id} in #box:${e_box.proj.id + 1} is erased by the claimer."`);
                 grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
             }
 
@@ -383,7 +398,7 @@ export class SOSolver extends Originator {
             throw RangeError(`Invalid range of parameter.`);
         }
 
-        const subset_type = { [2]: 'pair', [3]: 'triple', [4]: 'quad' }[subset_size];
+        const subset_type = { [2]: 'Pair', [3]: 'Triple', [4]: 'Quad' }[subset_size];
 
         return (pz: SOPuzzle): PartialMemento[] => {
             const v_ids = new Set<SOVertexID>(this.snapshot.vertices);
@@ -391,7 +406,7 @@ export class SOSolver extends Originator {
             const h_seg: PartialMemento[] = [
                 {
                     type: 'initial',
-                    logs: [`updated by naked ${subset_type}`],
+                    logs: [`title "Naked ${subset_type}"`],
                     snapshot: {
                         annotations: grp_cmds
                     }
@@ -416,15 +431,15 @@ export class SOSolver extends Originator {
                 const vset_s = found.strongVertices;
                 const vset_wonly = found.weakOnlyVertices;
                 /** Creates a report. */
-                h_seg[0].logs?.push(`log "Cells ${[...eset_s.map((e) => e.id)]} form a naked ${subset_type} in ${face.type} ${face.id + 1}."`);
+                h_seg[0].logs?.push(`log "#cell:${[...eset_s.map((e) => e.id)]} form a naked ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
                 grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
                 grp_cmds.push(`highlight ${face.type} ${face.id} as affected`);
                 grp_cmds.push(`highlight cell ${[...eset_s.map((e) => e.id)]} as intersect`);
 
-                /** Loops through the vertices visible from the hidden single. */
+                /** Loops through the vertices to be removed. */
                 for (const v_targ of vset_wonly) {
                     v_ids.delete(v_targ.id);
-                    h_seg[1].logs?.push(`log "Vertex ${v_targ.id} is erased."`);
+                    h_seg[1].logs?.push(`log "#v:${v_targ.id} is erased."`);
                     grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
                 }
 
@@ -442,7 +457,7 @@ export class SOSolver extends Originator {
             throw RangeError(`Invalid range of parameter.`);
         }
 
-        const subset_type = { [2]: 'pair', [3]: 'triple', [4]: 'quad' }[subset_size];
+        const subset_type = { [2]: 'Pair', [3]: 'Triple', [4]: 'Quad' }[subset_size];
 
         return (pz: SOPuzzle): PartialMemento[] => {
             const v_ids = new Set<SOVertexID>(this.snapshot.vertices);
@@ -450,7 +465,7 @@ export class SOSolver extends Originator {
             const h_seg: PartialMemento[] = [
                 {
                     type: 'initial',
-                    logs: [`updated by hidden ${subset_type}`],
+                    logs: [`title "Hidden ${subset_type}"`],
                     snapshot: {
                         annotations: grp_cmds
                     }
@@ -475,15 +490,15 @@ export class SOSolver extends Originator {
                 const eset_w = found.weakEdges;
                 const vset_wonly = found.weakOnlyVertices;
                 /** Creates a report. */
-                h_seg[0].logs?.push(`log "Cells ${[...eset_w.map((e) => e.id)]} form a hidden ${subset_type} in ${face.type} ${face.id + 1}."`);
+                h_seg[0].logs?.push(`log "#cell:${[...eset_w.map((e) => e.id)]} form a hidden ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
                 grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
                 grp_cmds.push(`highlight ${face.type} ${face.id} as based`);
                 grp_cmds.push(`highlight cell ${[...eset_w.map((e) => e.id)]} as intersect`);
 
-                /** Loops through the vertices visible from the hidden single. */
+                /** Loops through the vertices to be removed. */
                 for (const v_targ of vset_wonly) {
                     v_ids.delete(v_targ.id);
-                    h_seg[1].logs?.push(`log "Vertex ${v_targ.id} is erased."`);
+                    h_seg[1].logs?.push(`log "#v:${v_targ.id} is erased."`);
                     grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
                 }
 
@@ -501,7 +516,7 @@ export class SOSolver extends Originator {
             throw RangeError(`Invalid range of parameter.`);
         }
 
-        const subset_type = { [2]: 'X-wing', [3]: 'swordfish', [4]: 'jellyfish' }[subset_size];
+        const subset_type = { [2]: 'X-wing', [3]: 'Swordfish', [4]: 'Jellyfish' }[subset_size];
 
         return (pz: SOPuzzle): PartialMemento[] => {
             const v_ids = new Set<SOVertexID>(this.snapshot.vertices);
@@ -509,7 +524,7 @@ export class SOSolver extends Originator {
             const h_seg: PartialMemento[] = [
                 {
                     type: 'initial',
-                    logs: [`updated by ${subset_type}`],
+                    logs: [`title "${subset_type}"`],
                     snapshot: {
                         annotations: grp_cmds
                     }
@@ -534,16 +549,16 @@ export class SOSolver extends Originator {
                 const eset_w = found.weakEdges;
                 const vset_wonly = found.weakOnlyVertices;
                 /** Creates a report. */
-                h_seg[0].logs?.push(`log "Candidates ${face.id + 1} of cells ${[...vset_s.map((v) => v.$['rc'].id)]} form a ${subset_type}."`);
+                h_seg[0].logs?.push(`log "#key:${face.id} of #cell:${[...vset_s.map((v) => v.$['rc'].id)]} form a ${subset_type?.toLocaleLowerCase()}."`);
                 grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
                 eset_s.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as based`); });
                 eset_w.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as affected`); });
                 grp_cmds.push(`highlight cell ${[...vset_s.map((v) => v.$['rc'].id)]} as intersect`);
 
-                /** Loops through the vertices visible from the hidden single. */
+                /** Loops through the vertices to be removed. */
                 for (const v_targ of vset_wonly) {
                     v_ids.delete(v_targ.id);
-                    h_seg[1].logs?.push(`log "Vertex ${v_targ.id} is erased."`);
+                    h_seg[1].logs?.push(`log "#v:${v_targ.id} is erased."`);
                     grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
                 }
 
@@ -552,5 +567,115 @@ export class SOSolver extends Originator {
 
             return [];
         };
+    }
+
+
+    /** TEST: Counts the number of bivalue and multivalue edges */
+    singleDigit(pz: SOPuzzle): PartialMemento[] {
+        const v_ids = new Set<SOVertexID>(this.snapshot.vertices);
+        const grp_cmds = new Array<string>();
+        const h_seg: PartialMemento[] = [
+            {
+                type: 'initial',
+                logs: [`title "Single Digit Strategy"`],
+                snapshot: {
+                    annotations: grp_cmds
+                }
+            },
+            {
+                type: 'final',
+                logs: [],
+                snapshot: {
+                    vertices: v_ids,
+                    annotations: []
+                }
+            }
+        ];
+
+        for (const w_iter of pz.loopConfig(
+            [2, 4],
+            [0, 1],
+            ['rk', 'ck', 'bk'],
+            ['rk', 'ck', 'bk']
+        )) {
+            // for (const outcome of w_iter) {
+            //     const order = outcome.strongEdges.length;
+            //     const rank = outcome.weakEdges.length - order;
+            //     const idx = outcome.index;
+
+            //     if (!idx.every((_: SOVertex, m: number) => (m >= 0))) { continue; }
+            //     if (!idx.some((_: SOVertex, m: number) => (m > rank))) { continue; }
+
+            //     /** If a locked configuration has been found, */
+            //     h_seg[0].logs?.push(`log "Found a rank-${rank} locked configuration!"`);
+            //     outcome.weakEdges.forEach((e) => {
+            //         h_seg[0].logs?.push(`log "weak link: #${e.type}:${e.id}"`);
+            //         grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as affected`);
+            //     });
+            //     outcome.strongEdges.forEach((e) => {
+            //         h_seg[0].logs?.push(`log "strong link: #${e.type}:${e.id}"`);
+            //         grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as based`);
+            //     });
+
+            //     for (const [v_targ, m] of idx) {
+            //         if (m <= rank) { continue; }
+            //         v_ids.delete(v_targ.id);
+            //         h_seg[1].logs?.push(`log "#v:${v_targ.id} is erased."`);
+            //         grp_cmds.push(`highlight mark ${v_targ.id} as removed`);
+            //     }
+
+            //     return h_seg;
+            // }
+        }
+
+        return [];
+    }
+
+
+    /** TEST: Counts the number of bivalue and multivalue edges */
+    countMultivalues(pz: SOPuzzle): PartialMemento[] {
+        const v_ids = new Set<SOVertexID>(this.snapshot.vertices);
+        const grp_cmds = new Array<string>();
+        const h_seg: PartialMemento[] = [
+            {
+                type: 'initial',
+                logs: [`title "Counting"`],
+                snapshot: {
+                    annotations: grp_cmds
+                }
+            },
+            {
+                type: 'final',
+                logs: [],
+                snapshot: {
+                    vertices: v_ids,
+                    annotations: []
+                }
+            }
+        ];
+
+        const count_fn = (iter: IterableIterator<SOEdge>) => {
+            let count_bi = 0;
+            let count_multi = 0;
+            for (const edge of iter) {
+                const size = edge.$['v'].size;
+                if (size == 2) { count_bi++; }
+                if (size >= 2) { count_multi++; }
+            }
+
+            this.console.log(`# of bivalue edges: ${count_bi}`);
+            this.console.log(`# of multivalue edges: ${count_multi}`);
+        };
+
+        this.console.clear();
+        this.console.log(`As a whole:`);
+        count_fn(pz.loopEdges(['rc', 'rk', 'ck', 'bk']));
+
+        for (const face of pz.adF['key']) {
+            this.console.log(`<br>For key ${face.id + 1}:`);
+            count_fn(Set.union(face.$['rk'], face.$['ck'], face.$['bk']).values());
+        }
+
+        return [];
     }
 }

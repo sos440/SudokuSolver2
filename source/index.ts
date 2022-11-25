@@ -22,6 +22,17 @@ Editor.canvas.addTo(div_puzzle);
 
 const History = new Caretaker(Editor);
 
+Editor.console = {
+    log (msg: string) {
+        const dom_line = document.createElement('div');
+        dom_line.innerHTML = msg;
+        div_log.appendChild(dom_line);
+    },
+    clear(){
+        div_log.replaceChildren();
+    }
+}
+
 namespace TestRun {
     const loadPuzzle = (input: string, format: FormatOptions = 'base64') => {
         const v_ids = SOGameIO.import(Game, input, format);
@@ -46,8 +57,6 @@ namespace TestRun {
             selected: -1
         }));
         Editor.render();
-
-        console.log('Puzzle has been successfully imported.');
     };
 
     /** Strategy! */
@@ -65,40 +74,46 @@ namespace TestRun {
         Editor.hiddenSubsetGenerator(4),
         Editor.fishGenerator(2),
         Editor.fishGenerator(3),
-        Editor.fishGenerator(4)
+        Editor.fishGenerator(4),
+        Editor.singleDigit,
+        Editor.countMultivalues
     ];
 
     const solve_prev = () => {
         div_log.replaceChildren();
         History.moveBy(-1);
-        console.log(`At time: ${History.time}`);
     };
 
     const solve_next = () => {
         console.time('benchmark');
-        div_log.replaceChildren();
 
         if (History.atEnd()) {
             const v_ids = Editor.snapshot.vertices as Set<SOVertexID>;
             const pz = new SOPuzzle(Game.p, v_ids);
+            let is_updated = false;
             for (const strategy of strategy_list) {
                 const pmem_seg = strategy.call(Editor, pz);
                 if (pmem_seg.length == 0) { continue; }
                 History.addSegment(pmem_seg);
+                is_updated = true;
                 break;
+            }
+
+            /** Some dirty code added to control the auto solver functionality. */
+            if (!is_updated) {
+                autoSolverStatus.isActive = true;
+                auto_solve();
             }
         }
 
         History.moveBy(1);
-        console.log(`At time: ${History.time}`);
         console.timeEnd('benchmark');
     };
 
     const export_puzzle = () => {
-        div_log.replaceChildren();
-        div_log.appendChild(
-            document.createTextNode(`base64: ${SOGameIO.export(Game, (History.now() as Memento).snapshot.vertices as Set<SOVertexID>)}`)
-        );
+        const vset = (History.now() as Memento).snapshot.vertices as Set<SOVertexID>;
+        Editor.console.log(`simple: ${SOGameIO.export(Game, vset, 'simple')}`);
+        Editor.console.log(`base64: ${SOGameIO.export(Game, vset)}`);
         /** Copy the image to the clipboard. */
         navigator.clipboard.writeText(`data:image/svg+xml;base64,${btoa(Editor.canvas.element.outerHTML)}`);
     };
@@ -113,18 +128,12 @@ namespace TestRun {
     }
 
     const import_sample = () => {
-        div_log.replaceChildren();
         if (samples.selectedIndex >= 0) {
             const item = Database[samples.selectedIndex];
             loadPuzzle(item.data, item.format);
-            div_log.appendChild(
-                document.createTextNode(`Puzzle loaded.`)
-            );
         }
         else {
-            div_log.appendChild(
-                document.createTextNode(`No puzzle is selected.`)
-            );
+            Editor.console.log(`No puzzle is selected.`);
         }
     };
 
@@ -138,10 +147,30 @@ namespace TestRun {
         cmd_field.value = "";
     };
 
+    const autoSolverStatus = {
+        isActive: false,
+        handle: -1,
+        button: document.getElementById('auto') as HTMLButtonElement
+    };
+
+    const auto_solve = () => {
+        if (autoSolverStatus.isActive) {
+            autoSolverStatus.isActive = false;
+            clearInterval(autoSolverStatus.handle);
+            autoSolverStatus.button.innerHTML = 'Auto';
+        }
+        else {
+            autoSolverStatus.isActive = true;
+            autoSolverStatus.handle = setInterval(solve_next, 120);
+            autoSolverStatus.button.innerHTML = 'Stop';
+        }
+    }
+
     document.getElementById('prev')?.addEventListener('click', solve_prev);
     document.getElementById('next')?.addEventListener('click', solve_next);
     document.getElementById('export')?.addEventListener('click', export_puzzle);
     samples.addEventListener('change', import_sample);
     document.getElementById('import')?.addEventListener('click', import_sample);
     document.getElementById('apply_cmd')?.addEventListener('click', apply_cmd);
+    autoSolverStatus.button.addEventListener('click', auto_solve);
 }

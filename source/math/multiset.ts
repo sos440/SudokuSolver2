@@ -2,14 +2,20 @@
  * @module multiset
  */
 
-type Callback<V, R> = (element: V, multi?: number, cur_mset?: MSet<V>) => R;
+import { range } from "../basic/tools";
 
+type Callback<V, R> =
+    ((e: V) => R) |
+    ((e: V, m: number) => R) |
+    ((e: V, m: number, cur_mset: MSet<V>) => R);
+
+type MSetLike<V> = MSet<V> | Iterable<V>;
 
 /**
  * Represents multisets (with multiplicites taking integer values).
  */
 export class MSet<V> extends Map<V, number> {
-    constructor(e_iter?: IterableIterator<V> | MSet<V> | Set<V> | Array<V>) {
+    constructor(e_iter?: MSetLike<V>) {
         super();
         if (e_iter instanceof MSet<V>) {
             for (const [e, multi] of e_iter) {
@@ -28,6 +34,13 @@ export class MSet<V> extends Map<V, number> {
      */
     get count(): number {
         return Array.from(this.values()).reduce((s, x) => s + x, 0);
+    }
+
+    /**
+     * Computes the sum of multiplicites over the given set of elements.
+     */
+    sum(eset: Iterable<V>): number {
+        return [...eset].reduce((s, e) => s + this.aget(e), 0);
     }
 
     /**
@@ -63,6 +76,16 @@ export class MSet<V> extends Map<V, number> {
         return this;
     }
 
+    /** Eliminates elements with zero multiplicity. */
+    trim(): MSet<V> {
+        for (const [e, multi] of this) {
+            if (multi == 0) {
+                this.delete(e);
+            }
+        }
+        return this;
+    }
+
     /**
      * Adds an occurrence of the element to the MSet.
      */
@@ -87,6 +110,9 @@ export class MSet<V> extends Map<V, number> {
     /**
      * @returns {boolean} true if the test results in true for every distinguished element, or false if the test fails for some element.
      */
+    every(callback: (e: V) => boolean): boolean;
+    every(callback: (e: V, multi: number) => boolean): boolean;
+    every(callback: (e: V, multi: number, cur_mset: MSet<V>) => boolean): boolean;
     every(callback: Callback<V, boolean>): boolean {
         for (const [e, multi] of this) {
             if (!callback(e, multi, this)) {
@@ -99,6 +125,9 @@ export class MSet<V> extends Map<V, number> {
     /**
      * @returns {boolean} true if the test results in true for some distinguished element, or false if the test fails for every element.
      */
+    some(callback: (e: V) => boolean): boolean;
+    some(callback: (e: V, multi: number) => boolean): boolean;
+    some(callback: (e: V, multi: number, cur_mset: MSet<V>) => boolean): boolean;
     some(callback: Callback<V, boolean>): boolean {
         for (const [e, multi] of this) {
             if (callback(e, multi, this)) {
@@ -122,6 +151,10 @@ export class MSet<V> extends Map<V, number> {
     //     return result;
     // }
 
+    static shallowMSet<V>(mset: MSetLike<V>): MSet<V> {
+        return (mset instanceof MSet<V>) ? (mset as MSet<V>) : new MSet(mset);
+    }
+
     static geqZero<V>(cur_mset: MSet<V>): boolean {
         for (const [_, multi] of cur_mset) {
             if (multi < 0) {
@@ -133,49 +166,37 @@ export class MSet<V> extends Map<V, number> {
 
     static geq<V>(mset_a: MSet<V>, mset_b: MSet<V>): boolean {
         for (const [e_a, multi_a] of mset_a) {
-            if (multi_a < (mset_b.get(e_a) ?? 0)) {
+            if (multi_a < mset_b.aget(e_a)) {
                 return false;
             }
         }
         for (const [e_b, multi_b] of mset_b) {
-            if (multi_b > (mset_a.get(e_b) ?? 0)) {
+            if (multi_b > mset_a.aget(e_b)) {
                 return false;
             }
         }
         return true;
     }
 
-    static add<V>(...summands: MSet<V>[]): MSet<V> {
-        const result = new MSet<V>();
-        for (const cur_mset of summands) {
-            for (const [e, multi] of cur_mset) {
-                result.set(e, (result.get(e) ?? 0) + multi);
+    static add<V>(...msets: MSetLike<V>[]): MSet<V> {
+        if (msets.length == 0){
+            return new MSet<V>();
+        }
+        const result = new MSet<V>(msets[0]);
+        for (const i of range(1, msets.length)) {
+            for (const [e, multi] of MSet.shallowMSet(msets[i])) {
+                result.set(e, result.aget(e) + multi);
             }
         }
-        /** Eliminiates zero-count elements. */
-        for (const [e, multi] of result) {
-            if (multi == 0) {
-                result.delete(e);
-            }
-        }
-        return result;
+        return result.trim();
     }
 
-    static subtract<V>(mset_a: MSet<V>, mset_b: MSet<V>): MSet<V> {
-        const result = new MSet<V>();
-        for (const [e, multi] of mset_a) {
-            result.set(e, multi);
+    static subtract<V>(mset_a: MSetLike<V>, mset_b: MSetLike<V>): MSet<V> {
+        const result = new MSet<V>(mset_a);
+        for (const [e, multi] of MSet.shallowMSet(mset_b)) {
+            result.set(e, result.aget(e) - multi);
         }
-        for (const [e, multi] of mset_b) {
-            result.set(e, (result.get(e) ?? 0) - multi);
-        }
-        /** Eliminiate zero-count elements. */
-        for (const [e, multi] of result) {
-            if (multi == 0) {
-                result.delete(e);
-            }
-        }
-        return result;
+        return result.trim();
     }
 
     /**

@@ -3,6 +3,7 @@
  */
 import './math/math';
 import { BaseN, range } from './basic/tools';
+import { MSet } from './math/math';
 
 /** Representing "0-dimensional" sections. */
 export type SOVertexID = number;
@@ -35,6 +36,85 @@ export interface SOFace {
     type: SOFaceType;
     id: SOFaceID;
     $: { v: Set<SOVertex>, rc: Set<SOEdge>, rk: Set<SOEdge>, ck: Set<SOEdge>, bk: Set<SOEdge> }
+}
+
+
+/** Representing nodes of a search tree for the strong wing of configurations. */
+type Family<T> = Array<T> | Set<T>;
+class SOSearchTreeNode {
+    history: SOEdge[];
+    adjWeaks: Set<SOEdge>;
+    msetStrongs: MSet<SOVertex>;
+    children: SOSearchTreeNode[];
+    constructor(history: SOEdge[]) {
+        this.history = history;
+        this.adjWeaks = new Set<SOEdge>();
+        this.msetStrongs = new MSet<SOVertex>();
+        this.children = new Array<SOSearchTreeNode>();
+    }
+
+    /**
+     * Loops through the given range of depths.
+     * @param depth_s Start of the depth to loop through, inclusive.
+     * @param depth_e End of the depth to loop through, inclusive.
+     */
+    *levels(depth_s: number, depth_e: number = Infinity): IterableIterator<SOSearchTreeNode> {
+        if (depth_e < 0) {
+            return;
+        }
+        if (depth_s <= 0) {
+            yield this;
+        }
+        if (depth_e > 0) {
+            for (const node of this.children) {
+                yield* node.levels(depth_s - 1, depth_e - 1);
+            }
+        }
+    }
+
+    *levelsDown(depth_s: number, depth_e: number = Infinity): IterableIterator<SOSearchTreeNode> {
+        for (let depth = depth_s; depth <= depth_e; depth++) {
+            let count = 0;
+            for (const node of this.levels(depth, depth)) {
+                yield node;
+                count++;
+            }
+            if (count == 0) {
+                return;
+            }
+        }
+    }
+}
+
+interface SOExpSConfigStatus {
+    /** The smallest unexplored index for the list of strong edges. */
+    nextS: number;
+    /** The list of selected strong edges. */
+    edges: SOEdge[];
+    /** A partially constructed index function. */
+    index: MSet<SOVertex>;
+    /** The set of all possible weak edges that is incident to the selected strong edges. */
+    ['=>W']: Set<SOEdge>;
+    /** The set of all possible strong edges that is incident to the weak edges. */
+    ['=>W=>S']: Set<SOEdge>;
+}
+
+interface SOExpWConfigStatus {
+    /** The list of remaining weak edges to explore. */
+    remaining: SOEdge[];
+    /** The list of selected weak edges. */
+    edges: SOEdge[];
+    /** The index function at the given moment. */
+    index: MSet<SOVertex>;
+}
+
+interface SOExpConfigOutcome {
+    /** The list of selected strong edges. */
+    strongEdges: SOEdge[];
+    /** The list of selected weak edges. */
+    weakEdges: SOEdge[];
+    /** The index function. */
+    index: MSet<SOVertex>;
 }
 
 
@@ -239,5 +319,185 @@ export class SOPuzzle {
                 }
             }
         }
+    }
+
+    /**
+     * Creates a search tree for lists of strong links that are connected by weak links.
+     * @param eset The scope of strong links.
+     * @param s_types The types of strong edges to explore.
+     * @param w_types The types of weak edges to explore.
+     */
+    static buildSearchTree(
+        eset: Set<SOEdge>,
+        s_types: SOEdgeType[],
+        w_types: SOEdgeType[],
+        max_depth: number = Infinity
+    ) {
+        const nbd_s_dir = (e: SOEdge) => Set.union(...s_types.map((t) => e.$[t]));
+        const nbd_w_dir = (e: SOEdge) => Set.union(...w_types.map((t) => e.$[t]));
+        const expand = (ecol: Family<SOEdge>, nbd: (e: SOEdge) => Set<SOEdge>) => Set.union(...ecol.map(nbd));
+        const elist = [...eset].sort((e1, e2) => (e1.$['v'].size - e2.$['v'].size));
+
+        const root = new SOSearchTreeNode([]);
+        const build_next = (node: SOSearchTreeNode, elist_cur: SOEdge[]) => {
+            /** Computes the set of strong edges that can be added. */
+            const h_2nbd = (node.history.length > 0)
+                ? expand(node.adjWeaks, nbd_s_dir)
+                : eset;
+
+            /** Loops through the edges in the given list. */
+            for (const [i, e] of elist_cur.entries()) {
+                if (!h_2nbd.has(e)) { continue; }
+
+                /** Creates a new child node. */
+                const node_child = new SOSearchTreeNode(node.history.concat([e]));
+                node_child.adjWeaks = Set.diff(
+                    Set.union(node.adjWeaks, nbd_w_dir(e)),
+                    new Set(node_child.history)
+                );
+                node_child.msetStrongs = MSet.add(
+                    node.msetStrongs,
+                    new MSet(e.$['v'])
+                );
+
+                node.children.push(node_child);
+                if (node_child.history.length < max_depth) {
+                    build_next(node_child, elist_cur.slice(i + 1));
+                }
+            }
+
+            /** Returns the current node. */
+            return node;
+        };
+
+        return build_next(root, elist);
+    }
+
+    *loopConfig(
+        /** Interval notation for the order of configs to be explored. */
+        ord_itvl: [number, number],
+        /** Interval notation for the rank of configs to be explored. */
+        rank_itvl: [number, number],
+        /** Allowed types of strong edges. */
+        se_types: SOEdgeType[],
+        /** Allowed types of weak edges. */
+        we_types: SOEdgeType[]
+    ) {
+        /** Universe of all allowed strong edges. */
+        const se_univ = new Array<SOEdge>()
+            .concat(...se_types.map((t) => this.adE[t]))
+            .filter((e) => (e.$['v'].size > 1))
+            .sort((e1, e2) => (e1.$['v'].size - e2.$['v'].size));
+
+        /** Computes the set of all incident strong edges. */
+        const incS = (e: SOEdge) => Set.union(...se_types.map((t) => e.$[t]));
+        /** Computes the set of all incident weak edges. */
+        const incW = (e: SOEdge) => Set.union(...we_types.map((t) => e.$[t]));
+
+        const expW = function* (
+            node_s: SOExpSConfigStatus,
+            order: number,
+            depth: number,
+            parent_nodes: SOExpWConfigStatus[]
+        ): IterableIterator<SOExpConfigOutcome> {
+            if (depth > (order + rank_itvl[1])) { return; }
+
+            const cur_nodes = new Array<SOExpWConfigStatus>();
+            for (const node of parent_nodes) {
+                const cur_index = node.index;
+                /** Sort the remaining weak edges by the total index. */
+                const cur_remaining = node.remaining
+                    .map<[SOEdge, number]>((e) => [e, cur_index.sum(e.$['v'])])
+                    .sort((x1, x2) => x1[1] - x2[1])
+                    .map((x) => x[0]);
+                for (const [i, ew] of cur_remaining.entries()) {
+                    cur_nodes.push({
+                        remaining: cur_remaining.slice(i + 1),
+                        edges: node.edges.concat([ew]),
+                        index: MSet.add(cur_index, ew.$['v'])
+                    })
+                }
+            }
+
+            if (depth >= (order + rank_itvl[0])) {
+                for (const node_w of cur_nodes) {
+                    yield {
+                        strongEdges: node_s.edges,
+                        weakEdges: node_w.edges,
+                        index: node_w.index
+                    }
+                }
+            }
+
+            yield* expW(node_s, order, depth + 1, cur_nodes);
+        };
+
+        /** Creates an internal generator for recursive iteration. */
+        const expS = function* (
+            /** Current depth. */
+            order: number,
+            /** Set of nodes at the previous depth. */
+            parent_nodes: SOExpSConfigStatus[] = []
+        ): IterableIterator<IterableIterator<SOExpConfigOutcome>> {
+            /** Terminates the recursion when the depth is beyond the maximum order. */
+            if (order > ord_itvl[1]) { return; }
+
+            /** Builds the set of nodes at the current depth. */
+            const cur_nodes = new Array<SOExpSConfigStatus>();
+            if (order == 1) {
+                for (const i of range(0, se_univ.length)) {
+                    const se = se_univ[i];
+
+                    /** Creates a new exploration status from scratch. */
+                    const new_incW = incW(se);
+                    cur_nodes.push({
+                        nextS: i + 1,
+                        edges: [se],
+                        index: MSet.subtract(new MSet<SOVertex>(), new MSet(se.$['v'])),
+                        ['=>W']: new_incW,
+                        ['=>W=>S']: Set.union(...new_incW.map(incS))
+                    });
+                }
+            }
+            else {
+                for (const node of parent_nodes) {
+                    for (const i of range(node.nextS, se_univ.length)) {
+                        const se = se_univ[i];
+                        /** Does not allow overlapping strong edges. */
+                        if (node['=>W'].has(se)) { continue; }
+                        /** Only allows strong edges within 2-edge distance. */
+                        if (!node['=>W=>S'].has(se)) { continue; }
+
+                        /** Creates a new exploration status for the enlarged set of strong edges. */
+                        const new_incW = incW(se);
+                        cur_nodes.push({
+                            nextS: i + 1,
+                            edges: node.edges.concat([se]),
+                            index: MSet.subtract(node.index, new MSet(se.$['v'])),
+                            ['=>W']: Set.union(node['=>W'], new_incW),
+                            ['=>W=>S']: Set.union(node['=>W=>S'], ...new_incW.map(incS))
+                        });
+                    }
+                }
+            }
+
+            /** Yields the status if available. */
+            if (order >= ord_itvl[0]) {
+                for (const node_s of cur_nodes) {
+                    console.log(`Order: ${order} | W-neighbor size: ${node_s['=>W'].size}`);
+                    yield expW(node_s, order, 1, [{
+                        remaining: [...node_s['=>W']],
+                        edges: [],
+                        index: node_s.index
+                    }]);
+                }
+            }
+
+            /** Invoke the recursive step. */
+            yield* expS(order + 1, cur_nodes);
+        }
+
+        /** Initiate the generator. */
+        yield* expS(1);
     }
 }

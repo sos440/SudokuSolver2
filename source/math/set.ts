@@ -2,6 +2,8 @@
  * @module map_set
  */
 
+import { range } from "../basic/tools";
+
 
 /** Static properties of Set */
 declare global {
@@ -89,7 +91,9 @@ declare global {
         /** Creates a new Set by applying the map to each element. */
         map<U>(transform: (e: T, set?: Set<T>) => U): Set<U>;
         /** Loops through the family of subsets of the specified size. */
-        subsets(size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>>;
+        subsets(size: number): IterableIterator<Set<T>>;
+        /** Loops through the family of subsets of the specified size along with their reduced value. */
+        subsetsReduced<U>(size: number, reduce: (prev: U, e: T) => U, init: U): IterableIterator<[Set<T>, U]>;
         /** Returns true if every element of the Set passes the test, or false otherwise. */
         every(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean;
         /** Returns true if some element of the Set passes the test, or false otherwise. */
@@ -115,29 +119,74 @@ const set_map = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) =>
     return result;
 };
 
-const set_subsets = function* <T>(this: Set<T>, size: number, prev_set?: Set<T>, prev_list?: T[]): Generator<Set<T>> {
-    if (size > this.size || size < 0) {
-        return;
-    }
-    else if (size == 0) {
-        yield new Set<T>();
-        return;
-    }
-    else if (size == this.size) {
-        yield new Set<T>(this);
-        return;
-    }
+const set_subsets = function <T>(
+    this: Set<T>,
+    size: number
+): IterableIterator<Set<T>> {
+    const arr = [...this];
+    const iter = function* (
+        /** Start index of the tail subarray. */
+        i: number = 0,
+        /** Remaining number of elements to add. */
+        s: number = size,
+        /** Set built up to this point. */
+        set_p: Set<T> = new Set<T>()
+    ): IterableIterator<Set<T>> {
+        /** Some optimizations. */
+        /** Length of the tail subarray. */
+        if (s == 0) {
+            yield set_p;
+            return;
+        }
+        else if (s == (arr.length - i)) {
+            yield Set.union(set_p, new Set(arr.slice(i)));
+            return;
+        }
 
-    prev_list = prev_list ?? [...this.values()];
-    for (let i = 0; i < prev_list.length; i++) {
-        const cur_set = new Set<T>(prev_set).add(prev_list[i]);
-        if (size == 1) {
-            yield cur_set;
-        }
-        else {
-            yield* this.subsets(size - 1, cur_set, prev_list.slice(i + 1));
+        for (const j of range(i, arr.length + 1 - s)) {
+            yield* iter(j + 1, s - 1, new Set(set_p).add(arr[j]));
         }
     }
+    return iter();
+};
+
+const set_subsets_reduced = function* <T, U>(
+    this: Set<T>,
+    size: number,
+    reduce: (prev: U, e: T) => U,
+    init: U
+): IterableIterator<[Set<T>, U]> {
+    const arr = [...this];
+    const iter = function* (
+        /** Start index of the tail subarray. */
+        i: number = 0,
+        /** Remaining number of elements to add. */
+        s: number = size,
+        /** Set built up to this point. */
+        set_p: Set<T> = new Set<T>(),
+        red_p: U = init
+    ): IterableIterator<[Set<T>, U]> {
+        /** Some optimizations. */
+        /** Length of the tail subarray. */
+        if (s == 0) {
+            yield [set_p, red_p];
+            return;
+        }
+        else if (s == (arr.length - i)) {
+            const arr_tail = arr.slice(i);
+            yield [
+                Set.union(set_p, new Set(arr_tail)),
+                arr_tail.reduce(reduce, red_p)
+            ];
+            return;
+        }
+
+        for (const j of range(i, arr.length + 1 - s)) {
+            const e = arr[j];
+            yield* iter(j + 1, s - 1, new Set(set_p).add(e), reduce(red_p, e));
+        }
+    }
+    return iter();
 };
 
 const set_every = function <T>(this: Set<T>, test: (e: T, set?: Set<T>) => boolean): boolean {
@@ -173,6 +222,11 @@ Object.defineProperty(Set.prototype, 'subsets', {
     enumerable: false
 });
 
+Object.defineProperty(Set.prototype, 'subsetsReduced', {
+    value: set_subsets_reduced,
+    enumerable: false
+});
+
 Object.defineProperty(Set.prototype, 'every', {
     value: set_every,
     enumerable: false
@@ -185,4 +239,4 @@ Object.defineProperty(Set.prototype, 'some', {
 
 
 /** To make Typescript recognize this is indeed a module. */
-export {};
+export { };
