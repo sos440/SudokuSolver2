@@ -3,10 +3,11 @@
  */
 import './math/math';
 import { SOEdgeID, SOPuzzle, SOVertexID } from "./so_graph";
-import { SOSolver } from './so_solver';
-import { Caretaker, Memento } from "./system/memento";
 import { FormatOptions, SOGameIO } from './basic/io';
 import { database as Database } from './database';
+import { Caretaker, Memento } from "./system/memento";
+import { SOSolver } from './so_solver';
+import './so_strats/strats';
 
 console.log(`Sudoku Solver build 009`);
 
@@ -131,17 +132,20 @@ namespace TestRun {
         Editor.AICGenerator(
             'X-cycle',
             ['rk', 'ck', 'bk'],
-            ['rk', 'ck', 'bk']
+            ['rk', 'ck', 'bk'],
+            20
         ),
         Editor.AICGenerator(
             'XY-chain',
             ['rc'],
-            ['rk', 'ck', 'bk']
+            ['rk', 'ck', 'bk'],
+            20
         ),
         Editor.AICGenerator(
             'Alternating Inference Chain',
             ['rc', 'rk', 'ck', 'bk'],
-            ['rc', 'rk', 'ck', 'bk']
+            ['rc', 'rk', 'ck', 'bk'],
+            20
         ),
     ];
 

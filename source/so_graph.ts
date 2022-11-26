@@ -3,8 +3,6 @@
  */
 import './math/math';
 import { BaseN, range } from './basic/tools';
-import { MSet } from './math/math';
-import { AICExplore } from './so_aic';
 
 /** Representing "0-dimensional" sections. */
 export type SOVertexID = number;
@@ -180,7 +178,7 @@ export class SOPuzzle {
     };
 
     /** Returns the set of all vertices that can see the specified vertex. */
-    getVisibles(v: SOVertex){
+    getVisibles(v: SOVertex) {
         const v_visible = Set.union(v.$['rc'].$['v'], v.$['rk'].$['v'], v.$['ck'].$['v'], v.$['bk'].$['v']);
         v_visible.delete(v);
         return v_visible;
@@ -225,17 +223,6 @@ export class SOPuzzle {
         }
     }
 
-    /** Loops through the pair of intersecting line and box. */
-    *loopLineBox(): IterableIterator<[SOEdge, SOEdge]> {
-        for (const e_type of ['rk', 'ck'] as SOEdgeType[]) {
-            for (const e_line of this.adE[e_type]) {
-                for (const e_box of e_line.$['bk']) {
-                    yield [e_line, e_box];
-                }
-            }
-        }
-    }
-
     /** 
      * Loops through the rank-0 configuration of the specified order.
      * @param order The set size of each of the strong/weak wings.
@@ -273,26 +260,6 @@ export class SOPuzzle {
                         weakOnlyVertices: vset_wonly
                     };
                 }
-            }
-        }
-    }
-
-    *loopAIC(s_dir: SOEdgeType[], w_dir: SOEdgeType[]) {
-        /** This part is too long and specific, so I refactored it as a separate function. */
-
-        const exp_hashmap = new Map<SOVertex, AICExplore>();
-
-        for (const max_depth of range(2, 10)) {
-            for (const v of this.adV) {
-                /** Skip missing vertices and naked singles. */
-                if (!v) { continue; }
-                if (SOPuzzle.edgeTypes.some((t) => v.$[t].$['v'].size == 1)) { continue; }
-
-                if (!exp_hashmap.has(v)) {
-                    exp_hashmap.set(v, new AICExplore(v, s_dir, w_dir));
-                }
-                const explorer = exp_hashmap.get(v) as AICExplore;
-                yield* explorer.explore(max_depth);
             }
         }
     }
