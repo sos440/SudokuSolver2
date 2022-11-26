@@ -8,7 +8,7 @@ import { PuzzleCanvasSnapshot } from "./canvas";
 export abstract class Originator {
     abstract snapshot: PuzzleCanvasSnapshot;
     abstract selected: number;
-    abstract load(mem: Memento): void;
+    abstract load(mem: Memento, time: number): void;
 }
 
 
@@ -125,7 +125,7 @@ export class Caretaker {
             return false;
         }
         this.time = time_new;
-        this.originator.load(this.history[this.time]);
+        this.originator.load(this.history[this.time], this.time);
         return true;
     }
 
