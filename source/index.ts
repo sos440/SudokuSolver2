@@ -1,5 +1,5 @@
 /**
- * Main.
+ * Sudoku Solver (build 011)
  */
 import './math/math';
 import { SOEdgeID, SOPuzzle, SOVertexID } from "./so_graph";
@@ -8,8 +8,6 @@ import { database as Database } from './database';
 import { Caretaker, Memento } from "./system/memento";
 import { SOSolver } from './so_solver';
 import './so_strats/strats';
-
-console.log(`Sudoku Solver build 009`);
 
 const div_log = document.getElementById('logs') as HTMLElement;
 const div_puzzle = document.getElementById('puzzle') as HTMLElement;
@@ -117,34 +115,76 @@ namespace TestRun {
         Editor.hiddenSingle,
         Editor.intersectionPointing,
         Editor.intersectionClaiming,
+
         Editor.nakedSubsetGenerator(2),
         Editor.nakedSubsetGenerator(3),
         Editor.hiddenSubsetGenerator(2),
         Editor.nakedSubsetGenerator(4),
         Editor.hiddenSubsetGenerator(3),
         Editor.hiddenSubsetGenerator(4),
+
         Editor.fishGenerator(2),
         Editor.fishGenerator(3),
         Editor.fishGenerator(4),
+
         Editor.frankenFishGenerator(2),
         Editor.frankenFishGenerator(3),
         Editor.frankenFishGenerator(4),
+
         Editor.AICGenerator(
             'X-cycle',
             ['rk', 'ck', 'bk'],
             ['rk', 'ck', 'bk'],
             20
         ),
+        Editor.computeGroupedEdges,
+        Editor.AICGenerator(
+            'Grouped X-cycle',
+            ['rk', 'ck', 'bk', 'grp'],
+            ['rk', 'ck', 'bk', 'grp'],
+            20
+        ),
+
         Editor.AICGenerator(
             'XY-chain',
             ['rc'],
             ['rk', 'ck', 'bk'],
             20
         ),
+
         Editor.AICGenerator(
             'Alternating Inference Chain',
             ['rc', 'rk', 'ck', 'bk'],
             ['rc', 'rk', 'ck', 'bk'],
+            20
+        ),
+        Editor.AICGenerator(
+            'Grouped AIC',
+            ['rc', 'rk', 'ck', 'bk', 'grp'],
+            ['rc', 'rk', 'ck', 'bk', 'grp'],
+            20
+        ),
+
+        Editor.computeALEdges(9, [
+            ['row', ['rc'], ['rk']],
+            ['col', ['rc'], ['ck']],
+            ['box', ['rc'], ['bk']]
+        ]),
+        Editor.AICGenerator(
+            'ALS AIC',
+            ['rc', 'rk', 'ck', 'bk', 'als'],
+            ['rc', 'rk', 'ck', 'bk', 'als'],
+            20
+        ),
+        
+        Editor.computeALEdges(9, [
+            ['key', ['rk'], ['ck']],
+            ['key', ['ck'], ['rk']],
+        ]),
+        Editor.AICGenerator(
+            'Full AIC',
+            SOPuzzle.edgeTypes,
+            SOPuzzle.edgeTypes,
             20
         ),
     ];

@@ -4,46 +4,119 @@
 import './math/math';
 import { BaseN, range } from './basic/tools';
 
+export abstract class SOIncidenceElement {
+    selector: string;
+    $: {
+        v: Set<SOVertex>;
+        rc: Set<SOEdge>; rk: Set<SOEdge>; ck: Set<SOEdge>; bk: Set<SOEdge>;
+        grp: Set<SOEdge>; als: Set<SOEdge>; alf: Set<SOEdge>;
+        row?: SOFace; col?: SOFace; box?: SOFace; key?: SOFace;
+    };
+
+    constructor() {
+        this.selector = '';
+        this.$ = {
+            v: new Set<SOVertex>(),
+            rc: new Set<SOEdge>(),
+            rk: new Set<SOEdge>(),
+            ck: new Set<SOEdge>(),
+            bk: new Set<SOEdge>(),
+            grp: new Set<SOEdge>(),
+            als: new Set<SOEdge>(),
+            alf: new Set<SOEdge>()
+        }
+    }
+
+    *incident(t: SOEdgeType | Iterable<SOEdgeType>): IterableIterator<SOEdge> {
+        if (typeof t == 'string') {
+            yield* this.$[t];
+        }
+        else {
+            for (const t_inst of t) { yield* this.$[t_inst]; }
+        }
+    }
+}
+
 /** Representing "0-dimensional" sections. */
+export type SOVertexType = 'genuine' | 'abstract';
 export type SOVertexID = number;
-export interface SOVertex {
+export class SOVertex extends SOIncidenceElement {
+    type: SOVertexType;
     id: SOVertexID;
     name?: string;
-    $: {
-        rc: SOEdge, rk: SOEdge, ck: SOEdge, bk: SOEdge,
-        row: SOFace, col: SOFace, box: SOFace, key: SOFace
+    constructor(type: SOVertexType, id: SOVertexID, name?: string) {
+        super();
+        this.selector = `#v:${id}`;
+        this.type = type;
+        this.id = id;
+        this.name = name;
     }
 }
 
 /** Representing "1-dimensional" sections. */
 export type SOEdgeID = number;
-export type SOEdgeType = 'rc' | 'rk' | 'ck' | 'bk';
-export interface SOEdge {
+/**
+ * Represents the type of an edge.
+ * @example 
+ * `
+ * rc: a cell
+ * rk: a row with key given
+ * ck: a column with key given
+ * bk: a box with key given
+ * grp: an abstract edge used in grouped AIC
+ * als: an abstract edge used in ALS-based strategies (ALS = almost locked set)
+ * alf: an abstract edge used in ALF-based strategies (ALF = almost locked fish)
+ * `
+ */
+export type SOEdgeTypeGenuine = 'rc' | 'rk' | 'ck' | 'bk';
+export type SOEdgeType = SOEdgeTypeGenuine | 'grp' | 'als' | 'alf';
+export class SOEdge extends SOIncidenceElement {
     type: SOEdgeType;
     proj: SOEdge | SOFace;
     id: SOEdgeID;
     name?: string;
-    $: {
-        v: Set<SOVertex>,
-        rc: Set<SOEdge>, rk: Set<SOEdge>, ck: Set<SOEdge>, bk: Set<SOEdge>,
-        row?: SOFace, col?: SOFace, box?: SOFace, key?: SOFace
+    constructor(type: SOEdgeType, id: SOEdgeID, name?: string) {
+        super();
+        this.type = type;
+        this.id = id;
+        this.name = name;
+        this.proj = this;
     }
 }
 
 /** Representing "2-dimensional" sections. */
 export type SOFaceID = number;
 export type SOFaceType = 'row' | 'col' | 'box' | 'key';
-export interface SOFace {
+export class SOFace {
     type: SOFaceType;
     id: SOFaceID;
     name?: string;
-    $: { v: Set<SOVertex>, rc: Set<SOEdge>, rk: Set<SOEdge>, ck: Set<SOEdge>, bk: Set<SOEdge> }
-}
+    $: {
+        v: Set<SOVertex>;
+        rc: Set<SOEdge>; rk: Set<SOEdge>; ck: Set<SOEdge>; bk: Set<SOEdge>;
+    };
+    constructor(type: SOFaceType, id: SOFaceID, name?: string) {
+        this.type = type;
+        this.id = id;
+        this.name = name;
+        this.$ = {
+            v: new Set<SOVertex>(),
+            rc: new Set<SOEdge>(),
+            rk: new Set<SOEdge>(),
+            ck: new Set<SOEdge>(),
+            bk: new Set<SOEdge>()
+        }
+    }
 
-/**
- * Represents the type of a configuration.
- */
-type SOConfigType = [SOFaceType, SOEdgeType | SOEdgeType[], SOEdgeType | SOEdgeType[]];
+    *incident(t: SOEdgeTypeGenuine | Iterable<SOEdgeTypeGenuine>): IterableIterator<SOEdge> {
+        if (typeof t == 'string') {
+            yield* this.$[t];
+        }
+        else {
+            for (const t_inst of t) { yield* this.$[t_inst]; }
+        }
+    }
+}
 
 
 /**
@@ -70,40 +143,22 @@ export class SOPuzzle {
         this.D2 = this.D1 ** 2;
         this.D3 = this.D1 ** 3;
         this.adV = [];
-        this.adE = { rc: [], rk: [], ck: [], bk: [] };
+        this.adE = { rc: [], rk: [], ck: [], bk: [], grp: [], als: [], alf: [] };
         this.adF = { row: [], col: [], box: [], key: [] };
 
+        /** Add strict-type faces. */
         for (const [_, f_type, f_id] of this.__loopRawFaces()) {
-            this.adF[f_type][f_id] = {
-                type: f_type, id: f_id,
-                name: `${f_type}${f_id + 1}`,
-                $: {
-                    v: new Set<SOVertex>(),
-                    rc: new Set<SOEdge>(),
-                    rk: new Set<SOEdge>(),
-                    ck: new Set<SOEdge>(),
-                    bk: new Set<SOEdge>()
-                }
-            };
+            this.adF[f_type][f_id] = new SOFace(f_type, f_id, `${f_type}${f_id + 1}`);
         }
 
+        /** Add strict-type edges. */
         for (const [_, e_type, e_id, f_type1, f_type2] of this.__loopRawEdges()) {
             const [f_id1, f_id2] = BaseN.toD(e_id, 2, this.D1);
-            const e: SOEdge = {
-                type: e_type, id: e_id, proj: this.adF[f_type1][f_id1],
-                name: `${e_type}${f_id1 + 1}${f_id2 + 1}`,
-                $: {
-                    v: new Set<SOVertex>(),
-                    [f_type1]: this.adF[f_type1][f_id1],
-                    [f_type2]: this.adF[f_type2][f_id2],
-                    rc: new Set<SOEdge>(),
-                    rk: new Set<SOEdge>(),
-                    ck: new Set<SOEdge>(),
-                    bk: new Set<SOEdge>()
-                }
-            };
-            if (e_type == 'rc') {
-                e.proj = e;
+            const e = new SOEdge(e_type, e_id, `${e_type}${f_id1 + 1}${f_id2 + 1}`);
+            e.$[f_type1] = this.adF[f_type1][f_id1];
+            e.$[f_type2] = this.adF[f_type2][f_id2];
+            if (e_type != 'rc') {
+                e.proj = this.adF[f_type1][f_id1];
             };
             this.adE[e_type][e_id] = e;
         }
@@ -120,47 +175,59 @@ export class SOPuzzle {
             const box = BaseN.fromD([d[0], d[2]], this.p);
             const inn = BaseN.fromD([d[1], d[3]], this.p);
 
-            const v = {
-                id: v_id,
-                name: `${key + 1}[${row + 1},${col + 1}]`,
-                $: {
-                    rc: this.adE.rc[BaseN.fromD([row, col], this.D1)],
-                    rk: this.adE.rk[BaseN.fromD([row, key], this.D1)],
-                    ck: this.adE.ck[BaseN.fromD([col, key], this.D1)],
-                    bk: this.adE.bk[BaseN.fromD([box, key], this.D1)],
-                    row: this.adF.row[row],
-                    col: this.adF.col[col],
-                    box: this.adF.box[box],
-                    key: this.adF.key[key],
-                }
-            };
+            const v = new SOVertex('genuine', v_id, `${key + 1}[${row + 1},${col + 1}]`);
+            v.$['rc'].add(this.adE.rc[BaseN.fromD([row, col], this.D1)]);
+            v.$['rk'].add(this.adE.rk[BaseN.fromD([row, key], this.D1)]);
+            v.$['ck'].add(this.adE.ck[BaseN.fromD([col, key], this.D1)]);
+            v.$['bk'].add(this.adE.bk[BaseN.fromD([box, key], this.D1)]);
+            v.$['row'] = this.adF.row[row];
+            v.$['col'] = this.adF.col[col];
+            v.$['box'] = this.adF.box[box];
+            v.$['key'] = this.adF.key[key];
 
             this.adV[v_id] = v;
-            for (const e_type of SOPuzzle.edgeTypes) {
-                v.$[e_type].$['v'].add(v);
-                for (const e_type2 of SOPuzzle.edgeTypes) {
-                    v.$[e_type].$[e_type2].add(v.$[e_type2]);
+            for (const e_type of SOPuzzle.edgeTypesGenuine) {
+                for (const e of v.$[e_type]) {
+                    e.$['v'].add(v);
+                }
+                for (const e_type2 of SOPuzzle.edgeTypesGenuine) {
+                    for (const e1 of v.$[e_type]) {
+                        for (const e2 of v.$[e_type2]) {
+                            e1.$[e_type2].add(e2);
+                        }
+                    }
                 }
             }
             for (const f_type of SOPuzzle.faceTypes) {
-                v.$[f_type].$['v'].add(v);
-                for (const e_type of SOPuzzle.edgeTypes) {
-                    v.$[f_type].$[e_type].add(v.$[e_type]);
+                v.$[f_type]?.$['v'].add(v);
+                for (const e_type of SOPuzzle.edgeTypesGenuine) {
+                    for (const e of v.$[e_type]) {
+                        v.$[f_type]?.$[e_type].add(e);
+                    }
                 }
             }
         }
     }
 
-    static edgeTypes: SOEdgeType[] = ['rc', 'rk', 'ck', 'bk'];
-
+    static edgeTypes: SOEdgeType[] = ['rc', 'rk', 'ck', 'bk', 'grp', 'als', 'alf'];
+    static edgeTypesGenuine: SOEdgeTypeGenuine[] = ['rc', 'rk', 'ck', 'bk'];
     static faceTypes: SOFaceType[] = ['row', 'col', 'box', 'key'];
-
     static edgeTypeTriples: [SOEdgeType, SOFaceType, SOFaceType][] = [
         ['rc', 'row', 'col'],
         ['rk', 'row', 'key'],
         ['ck', 'col', 'key'],
         ['bk', 'box', 'key']
     ];
+
+    /** Loops through all the edges incident to the given vertex. */
+    static *incident(v: SOVertex | Iterable<SOVertex>, t: SOEdgeType | Iterable<SOEdgeType>): IterableIterator<SOEdge> {
+        if (v instanceof SOVertex) {
+            yield* v.incident(t);
+        }
+        else {
+            for (const v_inst of v) { yield* v_inst.incident(t); }
+        }
+    }
 
     /** Checks if the given input is a valid dimensional parameter. */
     static isDimParam = (p: number): boolean => {
@@ -178,9 +245,10 @@ export class SOPuzzle {
     };
 
     /** Returns the set of all vertices that can see the specified vertex. */
-    getVisibles(v: SOVertex) {
-        const v_visible = Set.union(v.$['rc'].$['v'], v.$['rk'].$['v'], v.$['ck'].$['v'], v.$['bk'].$['v']);
-        v_visible.delete(v);
+    getVisibles(v_src: SOVertex) {
+        const v_visible = new Set(v_src.incident(SOPuzzle.edgeTypes))
+            .mapUnion((e) => e.$['v'])
+            .filter((v) => (v != v_src) && (v.type == 'genuine'));
         return v_visible;
     }
 
@@ -209,58 +277,9 @@ export class SOPuzzle {
     }
 
     /** Loops through the edges of the specified types. */
-    *loopEdges(e_types: SOEdgeType[], v_ids?: Set<SOVertexID>): IterableIterator<SOEdge> {
-        if (v_ids && !this.isVertexIDSet(v_ids)) {
-            throw RangeError(`The input is not a valid set of vertex IDs.`);
-        }
+    *loopEdges(e_types: SOEdgeType[]): IterableIterator<SOEdge> {
         for (const e_type of e_types) {
-            if (v_ids) {
-                yield* v_ids.map((v) => this.adV[v].$[e_type]);
-            }
-            else {
-                yield* this.adE[e_type];
-            }
-        }
-    }
-
-    /** 
-     * Loops through the rank-0 configuration of the specified order.
-     * @param order The set size of each of the strong/weak wings.
-     * @param type_triples The list of all (face type, strong edge type, weak edge type) triples to investigate. 
-     */
-    *loopFaceConfig(order: number, type_triples: SOConfigType[]) {
-        for (const [f_type, e_type_s, e_type_w] of type_triples) {
-            for (const face of this.adF[f_type]) {
-                const eset_s = (typeof e_type_s == 'string')
-                    ? face.$[e_type_s]
-                    : Set.union(...e_type_s.map((t) => face.$[t]));
-                /** Filters strong edges with multiple candidates. */
-                const eset_s_f = eset_s.filter((e) => e.$['v'].size > 1);
-
-                /** Loops through subsets of strong units: */
-                for (const eset_s_sub of eset_s_f.subsets(order)) {
-                    /** Computes the set of weak edges intersecting strong edges. */
-                    const vset_s = Set.union(...eset_s_sub.map((e) => e.$['v']));
-                    const eset_w = (typeof e_type_w == 'string')
-                        ? vset_s.map((v) => v.$[e_type_w])
-                        : Set.union(...e_type_w.map((t) => vset_s.map((v) => v.$[t])));
-                    if (eset_w.size > order) { continue; }
-
-                    /** Computes the vertices in each of strong/weak set of edges. */
-                    const vset_w = Set.union(...eset_w.map((e) => e.$['v']));
-                    const vset_wonly = Set.diff(vset_w, vset_s);
-                    if (vset_wonly.size == 0) { continue; }
-
-                    yield {
-                        face: face,
-                        strongEdges: eset_s_sub,
-                        strongVertices: vset_s,
-                        weakEdges: eset_w,
-                        weakVertices: vset_w,
-                        weakOnlyVertices: vset_wonly
-                    };
-                }
-            }
+            yield* this.adE[e_type];
         }
     }
 }

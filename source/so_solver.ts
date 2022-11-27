@@ -100,6 +100,7 @@ export class SOSolver extends Originator {
                 const class_name = match_hl[3];
 
                 for (const id of id_list) {
+                    if (id < 0) { continue; }
                     if (type == 'mark') {
                         svg.markRects.show(id)?.attr(o[`rect:${class_name}`]);
                         svg.markTexts.get(id)?.attr(o[`text:${class_name}`]);
@@ -131,6 +132,7 @@ export class SOSolver extends Originator {
                 const id_list = match_uhl[2].split(/[\s,]+/).map((s) => Number.parseInt(s));
 
                 for (const id of id_list) {
+                    if (id < 0) { continue; }
                     if (type == 'mark') {
                         svg.markRects.clearStyle(id);
                         svg.markRects.hide(id);

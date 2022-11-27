@@ -139,17 +139,16 @@ export class MSet<V> extends Map<V, number> {
 
     /**
      * Creates a new MSet consiting of all elements passing the test.
-     * @note This is alredy implemented in and inherited from the base class Map.
      */
-    // filter(callback: Callback<V, boolean>): MSet<V> {
-    //     const result = new MSet<V>();
-    //     for (const [e, multi] of this) {
-    //         if (callback(e, multi, this)) {
-    //             result.set(e, multi);
-    //         }
-    //     }
-    //     return result;
-    // }
+    filter(callback: Callback<V, boolean>): MSet<V> {
+        const result = new MSet<V>();
+        for (const [e, multi] of this) {
+            if (callback(e, multi, this)) {
+                result.set(e, multi);
+            }
+        }
+        return result;
+    }
 
     static shallowMSet<V>(mset: MSetLike<V>): MSet<V> {
         return (mset instanceof MSet<V>) ? (mset as MSet<V>) : new MSet(mset);
@@ -195,6 +194,19 @@ export class MSet<V> extends Map<V, number> {
         const result = new MSet<V>(mset_a);
         for (const [e, multi] of MSet.shallowMSet(mset_b)) {
             result.set(e, result.aget(e) - multi);
+        }
+        return result.trim();
+    }
+
+    static union<V>(...msets: MSetLike<V>[]): MSet<V> {
+        if (msets.length == 0){
+            return new MSet<V>();
+        }
+        const result = new MSet<V>(msets[0]);
+        for (const i of range(1, msets.length)) {
+            for (const [e, multi] of MSet.shallowMSet(msets[i])) {
+                result.set(e, Math.max(result.aget(e), multi));
+            }
         }
         return result.trim();
     }

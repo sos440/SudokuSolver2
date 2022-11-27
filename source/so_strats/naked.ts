@@ -41,7 +41,7 @@ SOSolver.prototype.nakedSingle = function (pz: SOPuzzle): PartialMemento[] {
         if (vset.size == 1 && !v_id_dets.has(v_first.id)) {
             is_updated = true;
             v_id_dets.add(v_first.id);
-            grp_cmds.push(`highlight cell ${v_first.$['rc'].id} as determined`);
+            v_first.$['rc'].forEach((e) => { grp_cmds.push(`highlight cell ${e.id} as determined`); });
         }
     }
 
@@ -78,19 +78,21 @@ SOSolver.prototype.nakedSubsetGenerator = function (order: number) {
         ];
 
         for (const found of pz.loopFaceConfig(order, [
-            ['row', 'rc', 'rk'],
-            ['col', 'rc', 'ck'],
-            ['box', 'rc', 'bk']
+            ['row', ['rc'], ['rk']],
+            ['col', ['rc'], ['ck']],
+            ['box', ['rc'], ['bk']]
         ])) {
             const face = found.face;
             const eset_s = found.strongEdges;
             const vset_s = found.strongVertices;
             const vset_wonly = found.weakOnlyVertices;
             /** Creates a report. */
-            h_seg[0].logs?.push(`log "#cell:${[...eset_s.map((e) => e.id)]} form a naked ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
-            grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
+            const eset_s_ids = [...eset_s.map((e) => e.id)];
+            const vset_s_ids = [...vset_s.map((v) => v.id)];
+            h_seg[0].logs?.push(`log "#cell:${eset_s_ids} form a naked ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
+            grp_cmds.push(`highlight mark ${vset_s_ids} as determined`);
             grp_cmds.push(`highlight ${face.type} ${face.id} as affected`);
-            grp_cmds.push(`highlight cell ${[...eset_s.map((e) => e.id)]} as intersect`);
+            grp_cmds.push(`highlight cell ${eset_s_ids} as intersect`);
 
             /** Loops through the vertices to be removed. */
             for (const v_targ of vset_wonly) {

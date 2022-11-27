@@ -3,6 +3,7 @@
  * Aggregates all the strategies.
  */
 
+export * from './lock';
 export * from './obvious';
 export * from './naked';
 export * from './hidden';

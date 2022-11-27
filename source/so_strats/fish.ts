@@ -42,20 +42,23 @@ SOSolver.prototype.fishGenerator = function (order: number) {
         ];
 
         for (const found of pz.loopFaceConfig(order, [
-            ['key', 'rk', 'ck'],
-            ['key', 'ck', 'rk'],
+            ['key', ['rk'], ['ck']],
+            ['key', ['ck'], ['rk']],
         ])) {
             const face = found.face;
             const eset_s = found.strongEdges;
             const vset_s = found.strongVertices;
             const eset_w = found.weakEdges;
             const vset_wonly = found.weakOnlyVertices;
+
             /** Creates a report. */
-            h_seg[0].logs?.push(`log "#key:${face.id} of #cell:${[...vset_s.map((v) => v.$['rc'].id)]} form a ${subset_type?.toLocaleLowerCase()}."`);
-            grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
+            const eset_s_rc_ids = [...vset_s.mapUnion((v) => v.$['rc']).map((e) => e.id)];
+            const vset_s_ids = [...vset_s.map((v) => v.id)];
+            h_seg[0].logs?.push(`log "#key:${face.id} of #cell:${eset_s_rc_ids} form a ${subset_type?.toLocaleLowerCase()}."`);
+            grp_cmds.push(`highlight mark ${vset_s_ids} as determined`);
             eset_s.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as based`); });
             eset_w.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as affected`); });
-            grp_cmds.push(`highlight cell ${[...vset_s.map((v) => v.$['rc'].id)]} as intersect`);
+            grp_cmds.push(`highlight cell ${eset_s_rc_ids} as intersect`);
 
             /** Loops through the vertices to be removed. */
             for (const v_targ of vset_wonly) {
@@ -109,12 +112,15 @@ SOSolver.prototype.frankenFishGenerator = function (order: number) {
             const vset_s = found.strongVertices;
             const eset_w = found.weakEdges;
             const vset_wonly = found.weakOnlyVertices;
+            
             /** Creates a report. */
-            h_seg[0].logs?.push(`log "#key:${face.id} of #cell:${[...vset_s.map((v) => v.$['rc'].id)]} form a Franken ${subset_type?.toLocaleLowerCase()}."`);
-            grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
+            const eset_s_rc_ids = Set.union(...vset_s.map((v) => v.$['rc'])).map((e) => e.id);
+            const vset_s_ids = [...vset_s.map((v) => v.id)];
+            h_seg[0].logs?.push(`log "#key:${face.id} of #cell:${eset_s_rc_ids} form a Franken ${subset_type?.toLocaleLowerCase()}."`);
+            grp_cmds.push(`highlight mark ${vset_s_ids} as determined`);
             eset_s.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as based`); });
             eset_w.forEach((e) => { grp_cmds.push(`highlight ${e.proj.type} ${e.proj.id} as affected`); });
-            grp_cmds.push(`highlight cell ${[...vset_s.map((v) => v.$['rc'].id)]} as intersect`);
+            grp_cmds.push(`highlight cell ${eset_s_rc_ids} as intersect`);
 
             /** Loops through the vertices to be removed. */
             for (const v_targ of vset_wonly) {

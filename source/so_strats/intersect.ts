@@ -42,11 +42,13 @@ SOSolver.prototype.intersectionPointing = function (pz: SOPuzzle): PartialMement
         if (!(vset_box.size == vset_band.size && vset_line.size > vset_band.size)) { continue; }
 
         /** If an intersection pointer has been found. */
+        const vset_band_ids = [...vset_band.map((v) => v.id)];
+        const eset_band_ids = [...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)];
         h_seg[0].logs?.push(`log "The #box:${e_box.proj.id} and #${e_line.proj.type}:${e_line.proj.id} forms a locked configuration."`);
-        grp_cmds.push(`highlight mark ${[...vset_band.map((v) => v.id)]} as determined`);
+        grp_cmds.push(`highlight mark ${vset_band_ids} as determined`);
         grp_cmds.push(`highlight ${e_line.proj.type} ${e_line.proj.id} as affected`);
         grp_cmds.push(`highlight box ${e_box.proj.id} as based`);
-        grp_cmds.push(`highlight cell ${[...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)]} as intersect`);
+        grp_cmds.push(`highlight cell ${eset_band_ids} as intersect`);
 
         /** Loops through the vertices to be removed. */
         for (const v_targ of Set.diff(vset_line, vset_band)) {
@@ -93,11 +95,13 @@ SOSolver.prototype.intersectionClaiming = function (pz: SOPuzzle): PartialMement
         }
 
         /** If an intersection claimer has been found. */
+        const vset_band_ids = [...vset_band.map((v) => v.id)];
+        const eset_band_ids = [...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)];
         h_seg[0].logs?.push(`log "The #box:${e_box.proj.id} and #${e_line.proj.type}:${e_line.proj.id} forms a locked configuration."`);
-        grp_cmds.push(`highlight mark ${[...vset_band.map((v) => v.id)]} as determined`);
+        grp_cmds.push(`highlight mark ${vset_band_ids} as determined`);
         grp_cmds.push(`highlight box ${e_box.proj.id} as affected`);
         grp_cmds.push(`highlight ${e_line.proj.type} ${e_line.proj.id} as based`);
-        grp_cmds.push(`highlight cell ${[...Set.intersection(e_line.$['rc'], e_box.$['rc']).map((e) => e.id)]} as intersect`);
+        grp_cmds.push(`highlight cell ${eset_band_ids} as intersect`);
 
         /** Loops through the vertices to be removed. */
         for (const v_targ of Set.diff(vset_box, vset_band)) {
@@ -110,23 +114,4 @@ SOSolver.prototype.intersectionClaiming = function (pz: SOPuzzle): PartialMement
     }
 
     return [];
-}
-
-
-/** Merge declaration of the class SOPuzzle. */
-declare module "../so_graph" {
-    interface SOPuzzle {
-        /** Loops through the edges of the specified types. */
-        loopLineBox(): IterableIterator<[SOEdge, SOEdge]>;
-    }
-}
-
-SOPuzzle.prototype.loopLineBox = function* (): IterableIterator<[SOEdge, SOEdge]> {
-    for (const e_type of ['rk', 'ck'] as SOEdgeType[]) {
-        for (const e_line of this.adE[e_type]) {
-            for (const e_box of e_line.$['bk']) {
-                yield [e_line, e_box];
-            }
-        }
-    }
 }

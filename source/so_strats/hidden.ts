@@ -56,23 +56,26 @@ SOSolver.prototype.hiddenSingle = function (pz: SOPuzzle): PartialMemento[] {
 
         /** Skips naked singles. (This never happens if NS has already been applied.) */
         const e_cell = v_first.$['rc'];
-        const v_visible = new Set(e_cell.$['v']);
+        const v_visible = e_cell.mapUnion((e) => e.$['v']);
         v_visible.delete(v_first);
         if (v_visible.size == 0) { continue; }
 
         /** If a hidden single has been found. */
+        const e_cell_ids = [...e_cell.map((e) => e.id)];
         h_seg[0].logs?.push(`log "#v:${v_first.id} is a hidden single in #${f_proj.type}:${f_proj.id}."`);
         grp_cmds_rm.push(`highlight mark ${v_first.id} as determined`);
         grp_cmds_rm.push(`highlight ${f_proj.type} ${f_proj.id} as based`);
-        grp_cmds_rm.push(`highlight cell ${e_cell.id} as intersect`);
+        grp_cmds_rm.push(`highlight cell ${e_cell_ids} as intersect`);
+
+        /** Loops through the vertices to be removed. */
         for (const v_targ of v_visible) {
             v_ids.delete(v_targ.id);
-            h_seg[1].logs?.push(`log "#v:${v_targ.id} is in the same unit as the hidden single, hence is removed."`);
+            h_seg[1].logs?.push(`log "#v:${v_targ.id} is in the same cell as the hidden single, hence is removed."`);
             grp_cmds_rm.push(`highlight mark ${v_targ.id} as removed`);
         }
 
         v_id_dets.add(v_first.id);
-        grp_cmds_det.push(`highlight cell ${e_cell.id} as determined`);
+        grp_cmds_det.push(`highlight cell ${e_cell_ids} as determined`);
 
         return h_seg;
     }
@@ -110,19 +113,22 @@ SOSolver.prototype.hiddenSubsetGenerator = function (order: number) {
         ];
 
         for (const found of pz.loopFaceConfig(order, [
-            ['row', 'rk', 'rc'],
-            ['col', 'ck', 'rc'],
-            ['box', 'bk', 'rc']
+            ['row', ['rk'], ['rc']],
+            ['col', ['ck'], ['rc']],
+            ['box', ['bk'], ['rc']]
         ])) {
             const face = found.face;
             const vset_s = found.strongVertices;
             const eset_w = found.weakEdges;
             const vset_wonly = found.weakOnlyVertices;
+            
             /** Creates a report. */
-            h_seg[0].logs?.push(`log "#cell:${[...eset_w.map((e) => e.id)]} form a hidden ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
-            grp_cmds.push(`highlight mark ${[...vset_s.map((v) => v.id)]} as determined`);
+            const eset_w_ids = [...eset_w.map((e) => e.id)];
+            const vset_s_ids = [...vset_s.map((v) => v.id)];
+            h_seg[0].logs?.push(`log "#cell:${eset_w_ids} form a hidden ${subset_type?.toLocaleLowerCase()} in #${face.type}:${face.id}."`);
+            grp_cmds.push(`highlight mark ${vset_s_ids} as determined`);
             grp_cmds.push(`highlight ${face.type} ${face.id} as based`);
-            grp_cmds.push(`highlight cell ${[...eset_w.map((e) => e.id)]} as intersect`);
+            grp_cmds.push(`highlight cell ${eset_w_ids} as intersect`);
 
             /** Loops through the vertices to be removed. */
             for (const v_targ of vset_wonly) {

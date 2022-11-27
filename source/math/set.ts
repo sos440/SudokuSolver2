@@ -90,6 +90,8 @@ declare global {
         filter(test: (e: T, set?: Set<T>) => boolean): Set<T>;
         /** Creates a new Set by applying the map to each element. */
         map<U>(transform: (e: T, set?: Set<T>) => U): Set<U>;
+        /** Creates a new Set by applying the set-valued map to each element and then taking the union of outcomes. */
+        mapUnion<U>(transform: (e: T, set?: Set<T>) => Set<U>): Set<U>;
         /** Loops through the family of subsets of the specified size. */
         subsets(size: number): IterableIterator<Set<T>>;
         /** Loops through the family of subsets of the specified size along with their reduced value. */
@@ -115,6 +117,16 @@ const set_map = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) =>
     const result = new Set<U>();
     for (const e of this) {
         result.add(transform(e, this));
+    }
+    return result;
+};
+
+const set_map_union = function <T, U>(this: Set<T>, transform: (e: T, set?: Set<T>) => Set<U>): Set<U> {
+    const result = new Set<U>();
+    for (const eset of this) {
+        for (const e of transform(eset, this)){
+            result.add(e);
+        }
     }
     return result;
 };
@@ -214,6 +226,11 @@ Object.defineProperty(Set.prototype, 'filter', {
 
 Object.defineProperty(Set.prototype, 'map', {
     value: set_map,
+    enumerable: false
+});
+
+Object.defineProperty(Set.prototype, 'mapUnion', {
+    value: set_map_union,
     enumerable: false
 });
 

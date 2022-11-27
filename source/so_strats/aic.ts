@@ -57,8 +57,8 @@ SOSolver.prototype.AICGenerator = function (
             const vlist = result.vertexChain;
             const vlist_1 = vlist.filter((_, i) => ((i % 2) == 0));
             const vlist_2 = vlist.filter((_, i) => ((i % 2) == 1));
-            grp_cmds.push(`highlight mark ${vlist_1.map((v) => v.id)} as intersect`);
-            grp_cmds.push(`highlight mark ${vlist_2.map((v) => v.id)} as based`);
+            vlist_1.forEach((v) => { grp_cmds.push(`highlight mark ${v.id} as intersect`); });
+            vlist_2.forEach((v) => { grp_cmds.push(`highlight mark ${v.id} as based`); });
 
             /** A temporary code for conveniently dealing with rank -1 config. */
             if (result.rank == -1) {
@@ -86,8 +86,8 @@ SOSolver.prototype.AICGenerator = function (
                 h_seg[0].logs?.push(`log "A nice continuous loop of rank 0 and order ${result.strongEdges.size} has been found."`);
                 h_seg[0].logs?.push(`log "${vlist.map((v, i) => `${(i % 2) ? 'X' : ''}${v.name}`).join(' -- ')} -- cycle"`);
 
-                grp_cmds_rm.push(`highlight mark ${vlist_1.map((v) => v.id)} as intersect`);
-                grp_cmds_rm.push(`highlight mark ${vlist_2.map((v) => v.id)} as based`);
+                vlist_1.forEach((v) => { grp_cmds_rm.push(`highlight mark ${v.id} as intersect`); });
+                vlist_2.forEach((v) => { grp_cmds_rm.push(`highlight mark ${v.id} as based`); });
 
                 /** Loops through the vertices to be removed. */
                 for (const [v_targ, m] of result.weakOnlyVertices) {
@@ -109,8 +109,8 @@ SOSolver.prototype.AICGenerator = function (
                 h_seg[0].logs?.push(`log "${vlist.map((v, i) => `${(i % 2) ? '' : 'X'}${v.name}`).join(' -- ')}"`);
 
                 grp_cmds.push(`unhighlight mark ${result.conflictAt.id}`);
-                grp_cmds_rm.push(`highlight mark ${vlist_1.map((v) => v.id)} as intersect`);
-                grp_cmds_rm.push(`highlight mark ${vlist_2.map((v) => v.id)} as based`);
+                vlist_1.forEach((v) => { grp_cmds_rm.push(`highlight mark ${v.id} as intersect`); });
+                vlist_2.forEach((v) => { grp_cmds_rm.push(`highlight mark ${v.id} as based`); });
 
                 for (const v_targ of Set.intersection(
                     pz.getVisibles(vlist[0]),
@@ -273,8 +273,8 @@ export class AICExplore {
     /** Propagate the current state to the neighboring vertices. */
     *propagate(cur_state: AICExpState): IterableIterator<AICOutcome> {
         const cur_v = cur_state.vertex;
-        for (const t of SOPuzzle.edgeTypes) {
-            const cur_e = cur_v.$[t];
+        for (const cur_e of SOPuzzle.incident(cur_v, SOPuzzle.edgeTypes)) {
+            const new_t = cur_e.type;
 
             /** Casted strength type of the current edge based on that of the previous and current one. */
             const new_str = AICExplore.regardAs(
@@ -284,8 +284,8 @@ export class AICExplore {
 
             /** Only accepts the admissible edge types. */
             if (new_str == AICStrength.Never) { continue; }
-            if (new_str == AICStrength.Strong && this.sDir.indexOf(t) == -1) { continue; }
-            if (new_str == AICStrength.Weak && this.wDir.indexOf(t) == -1) { continue; }
+            if (new_str == AICStrength.Strong && this.sDir.indexOf(new_t) == -1) { continue; }
+            if (new_str == AICStrength.Weak && this.wDir.indexOf(new_t) == -1) { continue; }
 
             /** Loops through the vertices in the current edge. */
             for (const new_v of cur_e.$['v']) {
@@ -313,6 +313,10 @@ export class AICExplore {
             /** If the two state originaed from the same state: */
             if (new_state.prev == old_state.prev) {
                 /** Each link must be used only once, hence the new one is ignored. */
+                return;
+            }
+            else if (new_state.vertex.type == 'abstract') {
+                /** We do not care about conflicts at abstract vertices, hence the new one is ignored. */
                 return;
             }
             /** If the two states originated from the same initial truth value: */
@@ -358,7 +362,11 @@ export class AICExplore {
 
                 result.weakOnlyVertices = MSet.subtract(result.weakVertices, result.strongVertices);
 
-                if (result.rank >= 0 && !result.weakOnlyVertices.some((_: SOVertex, m: number) => m > result.rank)) { return; }
+                if (result.rank >= 0 &&
+                    !result.weakOnlyVertices.some((v: SOVertex, m: number) =>
+                        (m > result.rank) && (v.type == 'genuine')
+                    )
+                ) { return; }
 
                 result.vertexChain = [...new_state.vertexHistory.reverse(), ...old_state.vertexHistory.slice(1)];
 
@@ -413,7 +421,7 @@ SOPuzzle.prototype.loopAIC = function* (
         for (const v of this.adV) {
             /** Skip missing vertices and naked singles. */
             if (!v) { continue; }
-            if (SOPuzzle.edgeTypes.some((t) => v.$[t].$['v'].size == 1)) { continue; }
+            if ([...SOPuzzle.incident(v, SOPuzzle.edgeTypesGenuine)].some((e) => e.$['v'].size == 1)) { continue; }
 
             /** Initializes an exploration if it doesn't already have one. */
             if (!exp_hashmap.has(v)) {
