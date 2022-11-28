@@ -2,7 +2,7 @@ import { SOVertex, SOVertexID, SOEdge, SOEdgeType, SOPuzzle } from "../so_graph"
 import { PartialMemento } from "../system/memento";
 import { SOSolver } from "../so_solver";
 import { range } from "../basic/tools";
-import { MSet } from "../math/multiset";
+import { MSet } from "../math/mset";
 
 /** Merge declaration of the class SOSolver. */
 declare module "../so_solver" {
@@ -360,7 +360,7 @@ export class AICExplore {
                 result.strongVertices = MSet.add(...result.strongEdges.map((e) => e.$['v']));
                 result.weakVertices = MSet.add(...result.weakEdges.map((e) => e.$['v']));
 
-                result.weakOnlyVertices = MSet.subtract(result.weakVertices, result.strongVertices);
+                result.weakOnlyVertices = MSet.diff(result.weakVertices, result.strongVertices);
 
                 if (result.rank >= 0 &&
                     !result.weakOnlyVertices.some((v: SOVertex, m: number) =>

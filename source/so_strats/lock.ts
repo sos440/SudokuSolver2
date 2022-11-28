@@ -1,5 +1,5 @@
 import { range } from "../basic/tools";
-import { MSet } from "../math/multiset";
+import { MSet } from "../math/mset";
 import { SOVertex, SOEdge, SOEdgeType, SOEdgeTypeGenuine, SOFace, SOFaceType, SOPuzzle } from "../so_graph";
 import { SOSolver } from "../so_solver";
 import { PartialMemento } from "../system/memento";
@@ -172,7 +172,7 @@ SOPuzzle.prototype.computeALEdges = function (max_order: number, type_triples: S
                         const vset_w = MSet.add(...eset_w_sub.map((e) => e.$['v']));
 
                         /** Computes the index function and its positive/negative parts. */
-                        const vset_idx = MSet.subtract(vset_w, vset_s);
+                        const vset_idx = MSet.diff(vset_w, vset_s);
                         const vset_idx_neg = new MSet<SOVertex>();
                         const vset_idx_pos = new MSet<SOVertex>();
                         for (const [v, m] of vset_idx) {

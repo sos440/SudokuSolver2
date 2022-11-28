@@ -5,4 +5,4 @@
 
 export * from './set';
 export * from './map';
-export * from './multiset';
+export * from './mset';
