@@ -17,6 +17,10 @@ module.exports = {
                 loader: 'babel-loader',
             },
             {
+                test: /\.html$/i,
+                loader: "html-loader",
+            },
+            {
                 test: /\.css$/i,
                 use: 'css-loader',
             },
@@ -28,6 +32,10 @@ module.exports = {
                 test: /\.tsx?$/,
                 use: 'ts-loader',
                 exclude: /node_modules/
+            },
+            {
+                test: /\.txt$/,
+                use: 'raw-loader'
             }
         ],
     },

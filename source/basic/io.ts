@@ -1,123 +1,138 @@
 /**
  * A module for importing and exporting puzzle data.
  */
-import { b64_to_uint8, uint8_to_b64 } from "./base64";
+import { GameSpecItem } from "../spec/spec";
+import { RawPuzzle } from "./puzzle";
 
-export type FormatOptions = 'simple' | 'base64';
+export type FormatOptions = 'simple' | 'grid' | 'json';
 
-export class SOGameIO {
-    static exportSymbols = [
-        '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        ...String.fromCharCode(...new Array(26).fill(0).map((_, i) => 0x41 + i)),
-        ...String.fromCharCode(...new Array(26).fill(0).map((_, i) => 0x61 + i)),
-        '<', '>'
-    ];
+export type RawPuzzleJSON = {
+    type: string;
+    given: number[];
+    found: number[];
+    rest: number[];
+}
 
-    static importSymbols = new Map(this.exportSymbols.map((c, i) => [c, i]));
+export class IO {
+    static import(data: string, game_spec: GameSpecItem, format: FormatOptions): RawPuzzle {
+        const size = game_spec.size;
+        const num_cells = game_spec.cells.size;
 
-    /** Converts a formatted string to a vertex list. */
-    static import(
-        dims: { D1: number, D2: number, D3: number },
-        input: string,
-        format: FormatOptions = 'base64'
-    ): Set<number> {
-        if (dims.D1 > SOGameIO.exportSymbols.length) {
-            throw RangeError(`The dimensional parameter 'D1' is too large.`);
-        }
-
-        /** Guess the format of the string. */
-        if (input.length == dims.D2) {
-            format = 'simple';
-        }
-        else if (input.substring(0, 5) == 'data:') {
-            format = 'base64';
-        }
+        const result: RawPuzzle = {
+            type: game_spec.type,
+            given: new Set<number>(),
+            found: new Set<number>(),
+            rest: new Set<number>(),
+        };
 
         /** Parse string */
         if (format == 'simple') {
-            /** Build the list of vertices. */
-            const v_list: number[] = [];
-            for (const [e_rc_id, c] of Array.from(input).entries()) {
-                const v_id0 = e_rc_id * dims.D1;
-                if (this.importSymbols.has(c)) {
-                    v_list.push(v_id0 + (this.importSymbols.get(c) as number));
+            if (data.length != num_cells) {
+                throw TypeError(`The input is not a valid simple format.`);
+            }
+
+            /** Read each character and parse it accordingly. */
+            for (const [index, c] of Array.from(data).entries()) {
+                const v_id0 = index * size;
+                const num_idx = game_spec.invNumCharMap(c);
+                if (num_idx >= 0) {
+                    result.given.add(v_id0 + num_idx);
                 }
                 else {
-                    for (const key of new Array(dims.D1).keys()) {
-                        v_list.push(v_id0 + key);
+                    for (const num of new Array(size).keys()) {
+                        result.rest.add(v_id0 + num);
                     }
                 }
             }
-            return new Set(v_list);
         }
-        else if (format == 'base64') {
-            /** Build the list of indices to include. */
-            const compressed = b64_to_uint8(input.substring(5));
-            const v_list: number[] = [];
-            for (const [pos, val] of compressed.entries()) {
-                let v_id = pos * 8;
-                for (let i = 0; i < 8; i++) {
-                    if (v_id >= dims.D3) {
-                        break;
+        else if (format == 'grid') {
+            const match = data.match(new RegExp(`([${game_spec.numCharMap.join('')}]+|\\.)`, 'g'));
+            if (!match || match.length != num_cells) {
+                throw TypeError(`The input is not a valid grid format.`);
+            }
+
+            for (const [index, entry] of match.entries()) {
+                const v_id0 = index * size;
+                if (entry == '.') {
+                    for (const num of new Array(size).keys()) {
+                        result.rest.add(v_id0 + num);
                     }
-                    if ((val & (1 << i)) > 0) {
-                        v_list.push(v_id);
+                }
+                else if (entry.length == 1) {
+                    const num_idx = game_spec.invNumCharMap(entry);
+                    (num_idx >= 0) && result.found.add(v_id0 + num_idx);
+                }
+                else {
+                    for (const num_char of Array.from(entry)) {
+                        const num_idx = game_spec.invNumCharMap(num_char);
+                        (num_idx >= 0) && result.rest.add(v_id0 + num_idx);
                     }
-                    v_id++;
                 }
             }
-            return new Set(v_list);
+        }
+        else if (format == 'json') {
+            const parsed = JSON.parse(data) as RawPuzzleJSON;
+            if (parsed.type != result.type) {
+                throw TypeError(`The input is not a valid JSON format.`);
+            }
+
+            result.given = new Set(parsed.given);
+            result.found = new Set(parsed.found);
+            result.rest = new Set(parsed.rest);
         }
         else {
             const __type_exhausted: never = format;
             throw TypeError(`'${format}' is not a valid format.`);
         }
+
+        return result;
     }
 
 
-    /**
-     * Convert the source Hypergraph to a formatted string.
-     * The source must be a subgraph of 'this' HGSudokuVanilla graph.
-     */
-    static export(
-        dims: { D1: number, D2: number, D3: number },
-        v_set: Set<number>,
-        format: FormatOptions = 'base64'
-    ): string {
-        if (dims.D1 > SOGameIO.exportSymbols.length) {
-            throw RangeError(`The dimensional parameter 'D1' is too large.`);
-        }
+    static export(data: RawPuzzle, game_spec: GameSpecItem, format: FormatOptions): string {
+        const size = game_spec.size;
+        const num_cells = game_spec.cells.size;
 
         if (format == 'simple') {
-            const result: string[] = new Array(dims.D2).fill('!');
-            for (const v_id of v_set) {
-                const e_rc_id = Math.trunc(v_id / dims.D1);
-                const key = v_id % dims.D1;
-                if (result[e_rc_id] == '!') {
-                    result[e_rc_id] = this.exportSymbols[key];
-                }
-                else {
-                    result[e_rc_id] = '.';
-                }
+            /** Prepares a character map */
+            const result: string[] = new Array(num_cells).fill('.');
+            for (const v_id of [...data.given, ...data.found]) {
+                result[Math.trunc(v_id / size)] = game_spec.numCharMap[v_id % size];
             }
             return result.join('');
         }
-        else if (format == 'base64') {
-            /** Each 8 candidates are compressed to a single number and stored in this array. */
-            const compressed = new Uint8Array(Math.ceil(dims.D3 / 8));
-            for (const pos of compressed.keys()) {
-                /** @type {number} Current character. */
-                let c: number = 0;
-                for (let i = 0; i < 8; i++) {
-                    if (v_set.has(pos * 8 + i)) {
-                        c |= 1 << i;
-                    }
-                }
-                compressed[pos] = c;
+        else if (format == 'grid') {
+            /** Compuates the cell entries as array of zero-based indices. */
+            const entries: Array<number[]> = new Array(num_cells).fill(null).map(() => []);
+            for (const index of [...data.given, ...data.found, ...data.rest]) {
+                const cell_id = Math.trunc(index / size);
+                entries[cell_id].push(index % size);
             }
 
-            /** Return the base64 encoding of "compressed". */
-            return `data:${uint8_to_b64(compressed)}`;
+            /** Converts the entries to string. */
+            const entries_str = entries.map((entry) => {
+                if (entry.length == size) { return '.'; }
+                else { return entry.sort().map((num) => game_spec.numCharMap[num]).join(''); }
+            });
+
+            /** Computes column width. */
+            const col_width = new Array(game_spec.width).fill(0);
+            for (const [cell_index, entry_str] of entries_str.entries()) {
+                const cell = game_spec.cellsList[cell_index];
+                const col0 = cell.col - 1;
+                col_width[col0] = Math.max(col_width[col0], entry_str.length);
+            }
+
+            /** @todo Implement the rest! */
+            return '';
+        }
+        else if (format == 'json') {
+            return JSON.stringify({
+                type: data.type,
+                given: [...data.given],
+                found: [...data.found],
+                rest: [...data.rest],
+            });
         }
         else {
             const __type_exhausted: never = format;

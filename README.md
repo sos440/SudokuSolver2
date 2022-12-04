@@ -36,6 +36,53 @@ The functionalities I need:
 * Well-designed selector of a vertex, edge, ...
 
 
+[Implementaion Plan]
+
+1. A vertex is actually a singleton edge containing itself (or more precisely, a reference to itself).
+  - Why? Can use the same methodology for computing incidence structure.
+  - Easily generalizes to "grouped vertices".
+
+2. An edge is a set of vertices.
+
+3. Each vertex knows its incident edges and their types.
+
+4. Each edge must be uniquely specified by a suitable choice of selector.
+  - In particular, it must have enough information (suc as ID) to be distinguishable from others.
+
+5. Needs an efficient way of selecting edges through selector.
+
+6. Perhaps separate the whole puzzle into 3 (or several) mutually disconnected parts:
+
+  - clue: The subgraph of all clue pencilmarks.
+  - determined: The subgraph of all determined pencilmarks.
+  - rest
+
+  Each parts affect the logic in a different way. (For example, whether part of a UR pattern overlaps the clue part or determined part affects the UR logic differently; the clue part destroys UR-symmetry, whereas the determined part not.)
+
+  This also helps reduce the number of edges to scan.
+
+Edge selector examples:
+
+v #{r2c3n7}
+  : a pencilmark with value 7 at Cell (2, 3) = B3
+
+v.given #{r8c2n4}
+  : value 4 is a given at Cell (8, 2) = H2
+
+v.found #{r8c2n4}
+  : Cell (8, 2) = H2 is determined as 4.
+
+v #{r23c46n1}
+  : an abstract pencilmark represernting the locked X-wing with rows 2|3, columns 4|6 with value 1.
+
+v #{r2c135n347}
+  : an abstract pencilmark representing the locked triple with row 2, columns 1|3|5 with values 3|4|7.
+
+v #{r2b1n3}
+  : an abstract pencilmark representing the locked miniline that is the intersection of row 2 and box 1 with value 3.
+
+e #{b5n6}
+  : rule unit representing pencilmarks with value 6 in Box 5.
 
 
 
@@ -57,11 +104,14 @@ Primitive selectors:
 * RiVn = Row i with value n
 * CjVn = Column j with value n
 * BkVn = Box k with value n
-* _i = i-th item in the permutation.
+* _i = i-th generic variable (assumed to have different values from all the previous variables)
 
 Operators:
+* !A = not A
 * A & B = both A and B
 * A | B = either A or B
+* A~>B = A is adjacent to B
+* A[cond(#)] = The number (#) of elements of A satisfies cond(#)
 
 Syntactic sugars:
 * Ri = (RiC1 | ... | RiC9) | (RiV1 | ... | RiV9) // edges in Row i
@@ -70,13 +120,24 @@ Syntactic sugars:
 * Vn = (R1Vn | ... | R9Vn) | (C1Vn | ... | C9Vn) | (B1Vn | ... | B9Vn) // edges with value n
 
 
+Example1. Primitive selectors can be regarded as intersections. For example,
 
-Examples:
+Ri & Cj = RiCj
 
-Ri & Cj
-= [(RiC1 | ... | RiC9) | (RiV1 | ... | RiV9)] & [(R1Cj | ... | R9Cj) | (CjV1 | ... | CjV9)]
-= RiCj
+
+Example 2. Two bivalue cells in the same row:
+
+R_1C_1[#=2] | R_1C_2[#=2]
+= (R_1C_1 | R_1C_2)[#=2]
+= (R_1&[C_1|C_2])[#=2]
+
+
+Example 3. Two bivalue cells in the same row and sharing at least one candidate:
+
+(R_1&[C_1|C_2])[#=2]~>V_1
+
+
+Example 3. 
 
 (R_1 & (C_1|C_2)) | ((R_1|R_2|R_3) & C_1)
 = R_1C_1 | R_1C_2 | R_2C_1 | R_3C_1
-

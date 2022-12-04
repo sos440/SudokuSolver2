@@ -1,7 +1,7 @@
 {
     // https://www.typescriptlang.org/docs/handbook/compiler-options.html
     "compilerOptions": {
-        "target": "es6",
+        "target": "es2020",
         "module": "commonjs",
         "outDir": "./product", // js파일 아웃풋 경로바꾸기
         "rootDir": "./source", // 루트경로 바꾸기 (js 파일 아웃풋 경로에 영향줌)

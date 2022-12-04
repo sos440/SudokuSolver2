@@ -1,102 +1,85 @@
 /**
  * Sudoku Solver (build 011)
  */
-import './math/math';
-import { SOEdgeID, SOPuzzle, SOVertexID } from "./so_graph";
-import { FormatOptions, SOGameIO } from './basic/io';
+import { GameSpecItem, GameSpecs } from './spec/spec';
+import { Puzzle, RawPuzzle } from './basic/puzzle';
+import { FormatOptions, IO } from './basic/io';
 import { database as Database } from './database';
-import { Caretaker, Memento } from "./system/memento";
-import { SOSolver } from './so_solver';
-import './so_strats/strats';
+import { Caretaker, Memento, StrategyResult } from "./comp/memento";
+import { Solver } from './solver';
+import './strategies/merge';
 
-const div_log = document.getElementById('logs') as HTMLElement;
-const div_puzzle = document.getElementById('puzzle') as HTMLElement;
-
-/** A Sudoku original game template. */
-const Game = new SOPuzzle(3);
+/** Import the original sudoku rule. */
+const GameSO = GameSpecs.collections.get('sudoku original (3)') as GameSpecItem;
+if (typeof GameSO == 'undefined') {
+    throw TypeError('Failed to load the game rule.');
+}
 
 /** A puzzle canvas to display puzzles. */
-const Editor = new SOSolver(Game);
-Editor.canvas.addTo(div_puzzle);
+const Editor = new Solver(GameSO);
+Editor.canvas.addTo(document.getElementById('puzzle') as HTMLElement);
 
+/** An object storing and manipulating history. */
 const History = new Caretaker(Editor);
 
-const LogConsole = {
-    log(msg: string, attr: object = {}) {
+/** Console */
+namespace LogConsole {
+    const div_log = document.getElementById('logs') as HTMLElement;
+
+    export const log = (msg: string, attr: object = {}) => {
         const dom_line = document.createElement('div');
         for (const key in attr) {
             dom_line.setAttribute(key, attr[key as keyof typeof attr]);
         }
-        dom_line.innerHTML = msg;
+        dom_line.insertAdjacentHTML('beforeend', msg);
+        
         div_log.appendChild(dom_line);
-    },
-    clear() {
-        div_log.replaceChildren();
-    },
+        div_log.scrollTop = div_log.scrollHeight;
+    };
+
+    /** Clears part of the messages. Returns true if a message at the specified time alreday exists. */
+    export const clear = (time?: number): boolean => {
+        if (typeof time == 'undefined') {
+            div_log.replaceChildren();
+            return false;
+        }
+        else {
+            /** Must delete backward, since the children changes dynamically */
+            let has_log = false;
+            for (let i = div_log.children.length - 1; i >= 0; i--) {
+                const e = div_log.children[i];
+                const t = Number.parseInt(e.getAttribute('time') || '99999999');
+                if (t > time) {
+                    div_log.removeChild(e);
+                }
+                else if (t == time) {
+                    has_log = true;
+                }
+            }
+            return has_log;
+        }
+    };
 }
 
-Editor.printLogs = (log_list: string[], time: number): void => {
-    /** Must delete backward, since the children changes dynamically */
-    let has_log = false;
-    for (let i = div_log.children.length - 1; i >= 0; i--) {
-        const e = div_log.children[i];
-        const t = Number.parseInt(e.getAttribute('time') || '99999');
-        if (t > time) {
-            div_log.removeChild(e);
-        }
-        else if (t == time) {
-            has_log = true;
-        }
-    }
+Editor.printLogs = (msg_list: string[], time: number): void => {
+    const has_log = LogConsole.clear(time);
+    if (has_log) { return; }
 
     /** Writes down the log if it does not already exist. */
-    if (!has_log) {
-        for (const log of log_list) {
-            const attr: { time: string; style?: string; } = {
-                time: time.toString()
-            };
-
-            const match_title_lv1 = log.match(/^title novice "(.*)"$/);
-            const match_title_lv2 = log.match(/^title apprentice "(.*)"$/);
-            const match_title_lv3 = log.match(/^title expert "(.*)"$/);
-            const match_log = log.match(/log "(.*)"/);
-
-            if (match_title_lv1) {
-                attr['style'] = 'font-weight: bold; background-color: #E0E0E0;';
-                LogConsole.log(match_title_lv1[1], attr);
-            }
-            else if (match_title_lv2) {
-                /** khaki */
-                attr['style'] = 'font-weight: bold; background-color: #F0E68C;';
-                LogConsole.log(match_title_lv2[1], attr);
-            }
-            else if (match_title_lv3) {
-                /** cauliflower blue */
-                attr['style'] = 'font-weight: bold; background-color: #6495ED; color: white;';
-                LogConsole.log(match_title_lv3[1], attr);
-            }
-            else if (match_log) {
-                LogConsole.log(match_log[1], attr);
-            }
-        }
-    }
+    LogConsole.log(msg_list.join(''), { time: time.toString() });
 };
 
 namespace TestRun {
-    const loadPuzzle = (input: string, format: FormatOptions = 'base64') => {
-        const v_ids = SOGameIO.import(Game, input, format);
+    const loadPuzzle = (input: string, format: FormatOptions) => {
+        const pz_raw = IO.import(input, GameSO, format);
+        const pz = new Puzzle(GameSO, pz_raw);
 
         /** Initialize the editor. */
-        const pz = new SOPuzzle(Game.p, v_ids);
-        const v_id_clues = Set.union(...pz.adE['rc']
-            .filter((e) => (e.$['v'].size == 1))
-            .map((e) => e.$['v'].map((v) => v.id))
-        );
-
-        Editor.snapshot.vertices = v_ids;
-        Editor.snapshot.clues = v_id_clues;
-        Editor.snapshot.determined = v_id_clues;
-        Editor.snapshot.pencilmarked = new Set<SOEdgeID>();
+        Editor.snapshot.type = 'sudoku original (3)';
+        Editor.snapshot.given = pz_raw.given;
+        Editor.snapshot.found = pz_raw.found;
+        Editor.snapshot.rest = pz_raw.rest;
+        Editor.snapshot.pencilmarked = new Set<number>();
         Editor.snapshot.annotations = [];
 
         /** Initialize the history and render the puzzle. */
@@ -105,88 +88,16 @@ namespace TestRun {
             logs: ['Puzzle loaded.'],
             selected: -1
         }));
+
         Editor.render();
+        History.moveBy(0);
     };
 
     /** Strategy! */
     const strategy_list = [
         Editor.obviousCandidateRemoval,
         Editor.nakedSingle,
-        Editor.hiddenSingle,
-        Editor.intersectionPointing,
-        Editor.intersectionClaiming,
-
-        Editor.nakedSubsetGenerator(2),
-        Editor.nakedSubsetGenerator(3),
-        Editor.hiddenSubsetGenerator(2),
-        Editor.nakedSubsetGenerator(4),
-        Editor.hiddenSubsetGenerator(3),
-        Editor.hiddenSubsetGenerator(4),
-
-        Editor.fishGenerator(2),
-        Editor.fishGenerator(3),
-        Editor.fishGenerator(4),
-
-        Editor.frankenFishGenerator(2),
-        Editor.frankenFishGenerator(3),
-        Editor.frankenFishGenerator(4),
-
-        Editor.AICGenerator(
-            'X-cycle',
-            ['rk', 'ck', 'bk'],
-            ['rk', 'ck', 'bk'],
-            20
-        ),
-        Editor.computeGroupedEdges,
-        Editor.AICGenerator(
-            'Grouped X-cycle',
-            ['rk', 'ck', 'bk', 'grp'],
-            ['rk', 'ck', 'bk', 'grp'],
-            20
-        ),
-
-        Editor.AICGenerator(
-            'XY-chain',
-            ['rc'],
-            ['rk', 'ck', 'bk'],
-            20
-        ),
-
-        Editor.AICGenerator(
-            'Alternating Inference Chain',
-            ['rc', 'rk', 'ck', 'bk'],
-            ['rc', 'rk', 'ck', 'bk'],
-            20
-        ),
-        Editor.AICGenerator(
-            'Grouped AIC',
-            ['rc', 'rk', 'ck', 'bk', 'grp'],
-            ['rc', 'rk', 'ck', 'bk', 'grp'],
-            20
-        ),
-
-        Editor.computeALEdges(9, [
-            ['row', ['rc'], ['rk']],
-            ['col', ['rc'], ['ck']],
-            ['box', ['rc'], ['bk']]
-        ]),
-        Editor.AICGenerator(
-            'ALS AIC',
-            ['rc', 'rk', 'ck', 'bk', 'als'],
-            ['rc', 'rk', 'ck', 'bk', 'als'],
-            20
-        ),
-        
-        Editor.computeALEdges(9, [
-            ['key', ['rk'], ['ck']],
-            ['key', ['ck'], ['rk']],
-        ]),
-        Editor.AICGenerator(
-            'Full AIC',
-            SOPuzzle.edgeTypes,
-            SOPuzzle.edgeTypes,
-            20
-        ),
+        Editor.hiddenSingle
     ];
 
     const solve_prev = () => {
@@ -195,22 +106,30 @@ namespace TestRun {
 
     const solve_next = () => {
         console.time('benchmark');
+        LogConsole.clear(History.time);
 
         if (History.atEnd()) {
-            const v_ids = Editor.snapshot.vertices as Set<SOVertexID>;
-            const pz = new SOPuzzle(Game.p, v_ids);
-            let is_updated = false;
+            const pz = new Puzzle(GameSO, Editor.snapshot as RawPuzzle);
+            let pmem_seg = new StrategyResult();
             for (const strategy of strategy_list) {
-                const pmem_seg = strategy.call(Editor, pz);
-                if (pmem_seg.length == 0) { continue; }
-                History.addSegment(pmem_seg);
-                is_updated = true;
-                break;
+                pmem_seg = strategy.call(Editor, pz);
+                if (pmem_seg.isUpdated) {
+                    History.addSegment(pmem_seg.export());
+                    break;
+                }
+                else if (pmem_seg.isUpdated) {
+                    History.addSegment(pmem_seg.export());
+                    break;
+                }
             }
 
             /** Some dirty code added to control the auto solver functionality. */
-            if (!is_updated) {
-                LogConsole.log(`Cannot proceed further.`, { style: `background-color: red; color: white; font-weight: bold;` });
+            if (!(pmem_seg.isEnd || pmem_seg.isUpdated)) {
+                LogConsole.log(`
+                    <div class="msg_title error">
+                    Cannot proceed further.
+                    </div>
+                `);
                 autoSolverStatus.isActive = true;
                 auto_solve();
             }
@@ -221,10 +140,11 @@ namespace TestRun {
     };
 
     const export_puzzle = () => {
-        const vset = (History.now() as Memento).snapshot.vertices as Set<SOVertexID>;
+        const pz_raw = (History.now() as Memento).snapshot as RawPuzzle;
         LogConsole.clear();
-        LogConsole.log(`simple: ${SOGameIO.export(Game, vset, 'simple')}`);
-        LogConsole.log(`base64: ${SOGameIO.export(Game, vset)}`);
+        LogConsole.log(`simple: <pre>${IO.export(pz_raw, GameSO, 'simple')}</pre>`);
+        LogConsole.log(`grid: <pre>${IO.export(pz_raw, GameSO, 'grid')}</pre>`);
+        LogConsole.log(`json: <pre>${IO.export(pz_raw, GameSO, 'json')}</pre>`);
         /** Copy the image to the clipboard. */
         navigator.clipboard.writeText(`data:image/svg+xml;base64,${btoa(Editor.canvas.element.outerHTML)}`);
     };

@@ -2,7 +2,7 @@
  * A module for recording and navigating history.
  */
 
-import { PuzzleCanvasSnapshot } from "./canvas";
+import { PuzzleCanvasSnapshot } from "./svg";
 
 /** Represents the editor. */
 export abstract class Originator {
@@ -11,18 +11,16 @@ export abstract class Originator {
     abstract load(mem: Memento, time: number): void;
 }
 
-
 export interface PartialMemento {
     /** Type of the HistoryElement. */
     type?: string;
     /** Snapshot representing the puzzle right after the change has occurred. */
-    snapshot?: PuzzleCanvasSnapshot;
+    snapshot: PuzzleCanvasSnapshot;
     /** List of logs. */
-    logs?: string[];
+    logs: string[];
     /** Selected cell. */
     selected?: number;
 }
-
 
 /** Represents items in the timeline. */
 export class Memento implements PartialMemento {
@@ -34,7 +32,7 @@ export class Memento implements PartialMemento {
         this.type = type;
         this.snapshot = {};
         this.logs = [];
-        this.selected = NaN;
+        this.selected = -1;
         if (typeof pmem != 'undefined') {
             this.copyFrom(pmem);
         }
@@ -56,7 +54,6 @@ export class Memento implements PartialMemento {
         return this;
     }
 }
-
 
 /** Records and controls the history. */
 export class Caretaker {
@@ -130,10 +127,46 @@ export class Caretaker {
     }
 
     /** 
-     * Moves to a new momenty by the specified unit of time.
+     * Moves to a new momento by the specified unit of time.
      * @returns {boolean} true if the move was successful, or false if the caretaker was unable to move.
      */
     moveBy(dt: number): boolean {
         return this.moveTo(this.time + dt);
+    }
+}
+
+/** Represents the result of a strategy. */
+export class StrategyResult {
+    /** Indicates whether there has been updates made by the specified strategy. */
+    isUpdated: boolean;
+    /** Indicates whether the puzzle cannot be updated further (as it is solved, invalid, stuck, etc.) */
+    isEnd: boolean;
+    /** Stores partial mementos. */
+    segment: PartialMemento[];
+    constructor() {
+        this.isUpdated = false;
+        this.isEnd = false;
+        this.segment = [];
+    }
+
+    addBlankMementos(count: number) {
+        for (const _ of new Array(count).keys()) {
+            this.segment.push({ type: 'middle', logs: [], snapshot: {} });
+        }
+        return this;
+    }
+
+    export(): PartialMemento[] {
+        if (!this.isUpdated) {
+            return [];
+        }
+        else if (this.segment.length == 1) {
+            this.segment[0].type = 'initial|final';
+        }
+        else if (this.segment.length > 1) {
+            this.segment[0].type = 'initial';
+            this.segment[this.segment.length - 1].type = 'final';
+        }
+        return this.segment;
     }
 }

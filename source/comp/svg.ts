@@ -1,15 +1,18 @@
 /**
- * @module canvas
+ * @todo Refactor this so that it makes use of the information from GameSpecItem.
+ * (For example, use the text-based grid template to draw the actual field.)
+ * 
+ * @todo Consider using canvas object instead.
  */
 
-import '../math/math';
-import { multirange } from "../basic/tools";
+import { GameSpecItem } from "../spec/spec";
 
 /** Represents a puzzle augmented with annotations. */
 export interface PuzzleCanvasSnapshot {
-    vertices?: Set<number>;
-    clues?: Set<number>;
-    determined?: Set<number>;
+    type?: string;
+    rest?: Set<number>;
+    given?: Set<number>;
+    found?: Set<number>;
     pencilmarked?: Set<number>;
     annotations?: string[];
 }
@@ -155,12 +158,12 @@ class SVGGroup {
     }
 
     showAll() {
-        this.elements.map((_, elem) => elem.addTo(this.group));
+        this.elements.forEach(elem => elem.addTo(this.group));
         return this;
     }
 
     hideAll() {
-        this.elements.map((_, elem) => this.group.remove(elem));
+        this.elements.forEach(elem => this.group.remove(elem));
         return this;
     }
 
@@ -175,7 +178,7 @@ class SVGGroup {
     }
 
     clearAll() {
-        this.elements.map((_, elem) => this.clearStyle(elem));
+        this.elements.forEach(elem => this.clearStyle(elem));
         return this;
     }
 }
@@ -189,8 +192,10 @@ export class PuzzleCanvas extends SVG {
     markRects: SVGGroup;
     markTexts: SVGGroup;
     drawing: SVG;
-    constructor(options: Attributes = {}) {
+    constructor(game_spec: GameSpecItem, options: Attributes = {}) {
         super('svg');
+        options.rows = game_spec.height;
+        options.cols = game_spec.width;
         const o = PuzzleCanvas.computeStyle(options) as Attributes;
 
         /** Basic styles. */
@@ -217,14 +222,14 @@ export class PuzzleCanvas extends SVG {
             for (const i of new Array(rows).keys()) {
                 const cell_xy = PuzzleCanvas.cellCenterXY(0, i, o);
                 this.headerGroup.text(
-                    o['header-row-symbols'].charAt(i),
+                    game_spec.rowCharMap[i],
                     { x: c_hdr_size, y: cell_xy[1] }
                 );
             }
             for (const i of new Array(cols).keys()) {
                 const cell_xy = PuzzleCanvas.cellCenterXY(i, 0, o);
                 this.headerGroup.text(
-                    o['header-column-symbols'].charAt(i),
+                    game_spec.colCharMap[i],
                     { x: cell_xy[0], y: c_hdr_size }
                 );
             }
@@ -234,36 +239,42 @@ export class PuzzleCanvas extends SVG {
         const cell_dw = o['cell-size'];
         this.cellRects = new SVGGroup(this.g({ id: 'cell_rect', fill: 'white' }));
         this.cellTexts = new SVGGroup(this.g({ id: 'cell_text' }).attr(o['cell-font']));
-        for (const [x, y] of multirange(rows, cols)) {
-            const index = y * cols + x;
-            const pos = PuzzleCanvas.cellXY(x, y, o);
-            this.cellRects.set(
-                index,
-                new SVG('rect', { x: pos[0], y: pos[1], width: cell_dw, height: cell_dw, rx: 4, ry: 4 })
-            );
-            this.cellTexts.set(
-                index,
-                new SVG('text', { x: pos[0] + 0.5 * cell_dw, y: pos[1] + 0.5 * cell_dw })
-            );
+        for (const x of new Array(rows).keys()) {
+            for (const y of new Array(cols).keys()) {
+                const index = y * cols + x;
+                const pos = PuzzleCanvas.cellXY(x, y, o);
+                this.cellRects.set(
+                    index,
+                    new SVG('rect', { x: pos[0], y: pos[1], width: cell_dw, height: cell_dw, rx: 4, ry: 4 })
+                );
+                this.cellTexts.set(
+                    index,
+                    new SVG('text', { x: pos[0] + 0.5 * cell_dw, y: pos[1] + 0.5 * cell_dw })
+                );
+            }
         }
 
         /** Generates a mark group. */
         const mark_dw = o['mark-size'];
         this.markRects = new SVGGroup(this.g({ id: 'mark_rect' }));
         this.markTexts = new SVGGroup(this.g({ id: 'mark_text' }).attr(o['mark-font']));
-        for (const [x, y, key] of multirange(cols, rows, D1)) {
-            const index = (y * cols + x) * D1 + key;
-            const pos = PuzzleCanvas.markXY(x, y, key, o);
-            this.markRects.set(
-                index,
-                new SVG('rect', { x: pos[0], y: pos[1], width: mark_dw, height: mark_dw, rx: 4, ry: 4 })
-            );
-            this.markTexts.set(
-                index,
-                new SVG('text')
-                    .html(o['mark-symbols'].charAt(key))
-                    .attr({ x: pos[0] + 0.5 * mark_dw, y: pos[1] + 0.5 * mark_dw })
-            );
+        for (const x of new Array(rows).keys()) {
+            for (const y of new Array(cols).keys()) {
+                for (const num of new Array(D1).keys()) {
+                    const index = (y * cols + x) * D1 + num;
+                    const pos = PuzzleCanvas.markXY(x, y, num, o);
+                    this.markRects.set(
+                        index,
+                        new SVG('rect', { x: pos[0], y: pos[1], width: mark_dw, height: mark_dw, rx: 4, ry: 4 })
+                    );
+                    this.markTexts.set(
+                        index,
+                        new SVG('text')
+                            .html(`${game_spec.numCharMap[num]}`)
+                            .attr({ x: pos[0] + 0.5 * mark_dw, y: pos[1] + 0.5 * mark_dw })
+                    );
+                }
+            }
         }
 
         this.drawing = this.g({ id: 'drawing' });
@@ -277,13 +288,13 @@ export class PuzzleCanvas extends SVG {
     static computeStyle(o: Attributes = {}) {
         o = Object.assign(Object.assign({}, PuzzleCanvas.options), o);
 
-        if (o['rows'] != o['header-row-symbols'].length) {
+        if (o['rows'] > o['header-row-symbols'].length) {
             throw RangeError(`The length of the row header does not match the number of rows.`);
         }
-        else if (o['columns'] != o['header-column-symbols'].length) {
+        else if (o['columns'] > o['header-column-symbols'].length) {
             throw RangeError(`The length of the column header does not match the number of columns.`);
         }
-        else if (o['dimension'] ** 2 != o['mark-symbols'].length) {
+        else if (o['dimension'] ** 2 > o['mark-symbols'].length) {
             throw RangeError(`The length of the column header does not match the number of columns.`);
         }
 

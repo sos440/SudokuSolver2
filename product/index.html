@@ -4,24 +4,119 @@
 <head>
     <meta charset="utf-8" />
     <title>Sudoku Solver Console</title>
+    <style>
+        html,
+        body {
+            height: 100vh;
+            margin: 0;
+        }
+
+        #body {
+            display: flex;
+            flex-flow: column;
+            margin: 0px;
+            font-family: Arial, Helvetica, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        nav {
+            flex: 0 0 80px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            background-color: #0080FF;
+            padding: 10px 10px;
+        }
+
+        nav div {
+            flex: 1 1 auto;
+        }
+
+        button {
+            background-color: white;
+            border: 0px;
+            padding: 4px;
+            color: #0080FF;
+            font-weight: bold;
+            min-width: 75px;
+            border-radius: 4px;
+        }
+
+        #display {
+            box-sizing: border-box;
+            flex: 1 1 calc(100vh - 80px);
+            display: flex;
+            flex-direction: row;
+            padding: 10px 0px;
+        }
+
+        #puzzle {
+            flex: 0 1 auto;
+        }
+
+        #logs {
+            flex: 1 1 auto;
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+            font-size: 15px;
+        }
+
+        #logs p {
+            display: block;
+            margin-block-start: 3px;
+            margin-block-end: 3px;
+        }
+
+        #logs div {
+            padding: 3px 12px;
+        }
+
+        #logs div.msg_title {
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        #logs div.lv_novice {
+            background-color: #d0d0d0;
+        }
+
+        #logs div.lv_apprentice {
+            background-color: #f0e68c;
+        }
+
+        #logs div.lv_adept {
+            background-color: #6495ED;
+            color: white;
+        }
+
+        #logs div.error {
+            background-color: red;
+            color: white;
+        }
+    </style>
 </head>
 
 <body>
-    <nav>
-        <div>
-            <button id="prev">Prev</button>
-            <button id="next">Next</button>
-            <button id="auto">Auto</button>
-            <button id="export">Export</button>
-            <select id="samples"></select>
-            <button id="import">Import</button>
+    <div id="body">
+        <nav>
+            <div>
+                <button id="prev">Prev</button>
+                <button id="next">Next</button>
+                <button id="auto">Auto</button>
+                <button id="export">Export</button>
+                <select id="samples"></select>
+                <button id="import">Import</button>
+            </div>
+            <div>
+                <input id="cmd" type="text" size="50" /><button id="apply_cmd">Apply</button>
+            </div>
+        </nav>
+        <div id="display">
+            <div id="puzzle"></div>
+            <div id="logs"></div>
         </div>
-        <div>
-            <input id="cmd" type="text" size="50" /><button id="apply_cmd">Apply</button>
-        </div>
-    </nav>
-    <div id="puzzle"></div>
-    <div id="logs"></div>
+    </div>
     <script src="main.js"></script>
 </body>
 
