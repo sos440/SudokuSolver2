@@ -5,7 +5,7 @@ declare global {
     }
 }
 
-Object.defineProperty(Set.prototype, 'subArrays', {
+Object.defineProperty(Array.prototype, 'subArrays', {
     enumerable: false,
     value<T>(this: T[], size: number): IterableIterator<T[]> {
         return new SubarrayIterator(this, size);

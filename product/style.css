@@ -1,0 +1,139 @@
+html,
+body {
+    height: 100vh;
+    margin: 0;
+}
+
+#body {
+    display: flex;
+    flex-flow: column;
+    margin: 0px;
+    font-family: Arial, Helvetica, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+}
+
+nav {
+    flex: 0 0 80px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    background-color: #0080FF;
+    padding: 10px 10px;
+}
+
+nav div {
+    flex: 1 1 auto;
+}
+
+button {
+    background-color: white;
+    border: 0px;
+    padding: 4px;
+    color: #0080FF;
+    font-weight: bold;
+    min-width: 75px;
+    border-radius: 5px;
+}
+
+#display {
+    box-sizing: border-box;
+    flex: 1 1 calc(100vh - 80px);
+    display: flex;
+    flex-direction: row;
+    padding: 10px 0px;
+}
+
+#puzzle {
+    flex: 0 1 auto;
+}
+
+#logs {
+    font-size: 14px;
+    flex: 1 1 auto;
+    height: calc(100vh - 100px);
+    overflow-y: auto;
+}
+
+#logs p {
+    display: block;
+    margin-block-start: 2px;
+    margin-block-end: 2px;
+    line-height: 20px;
+}
+
+#logs div.line {
+    display: block;
+    margin-block-start: 6px;
+    margin-block-end: 6px;
+}
+
+#logs div {
+    padding: 3px 12px;
+}
+
+#logs div.msg_title {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    border-radius: 4px;
+}
+
+#logs div.done {
+    background-color: #0080FF;
+    color: white;
+}
+
+#logs div.error {
+    background-color: #f03838;
+    color: white;
+}
+
+#logs div.lv_novice {
+    background-color: #d0d0d0;
+}
+
+#logs div.lv_apprentice {
+    background-color: #f0e68c;
+}
+
+#logs div.lv_adept {
+    background-color: #31a6f3;
+}
+
+span.highlight {
+    padding: 0px 4px;
+    border-radius: 3px;
+    border: 1px solid;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: bold;
+}
+
+span.hl_removed {
+    color: red;
+    background-color: rgb(255, 255, 219);
+    border-color: pink;
+}
+
+span.hl_determined {
+    color: hsl(216, 75%, 25%);
+    background-color: hsl(216, 100%, 95%);
+    border-color: hsl(216, 67%, 33%);
+}
+
+span.hl_based {
+    color: hsl(142, 75%, 25%);
+    background-color: hsl(142, 100%, 95%);
+    border-color: hsl(142, 67%, 33%);
+}
+
+span.hl_affected {
+    color: hsl(350, 75%, 25%);
+    background-color: hsl(350, 100%, 95%);
+    border-color: hsl(350, 67%, 33%);
+}
+
+span.hl_intersect {
+    color: hsl(200, 75%, 25%);
+    background-color: hsl(200, 100%, 95%);
+    border-color: hsl(200, 67%, 33%);
+}

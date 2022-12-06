@@ -29,6 +29,13 @@ export class GameHouse {
     }
 }
 
+export type ParseIDAction = {
+    mark: (v_id: number) => void, 
+    cell: (cell_id: number) => void, 
+    house: (cell_id: number) => void, 
+    err: (e: Error) => void
+}
+
 export class GameSpecItem {
     /** The type of the game, which is a string unique to each game. */
     type: string;
@@ -69,6 +76,61 @@ export class GameSpecItem {
 
     invNumCharMap(char: string) {
         return this.numCharMap.indexOf(char);
+    }
+
+    parseID(id: string, action: ParseIDAction) {
+        /** Render marks */
+        const match_mark = id.match(/^(r\d+c\d+)n(\d+)$/);
+        if (match_mark) {
+            const cell = this.cells.get(match_mark[1]);
+            if (typeof cell == 'undefined') {
+                action.err(new RangeError(`The cell '${match_mark[1]}' does not exist.`));
+                return;
+            }
+
+            const cell_id = cell.index;
+            const num = Number.parseInt(match_mark[2]) - 1;
+            action.mark(cell_id * this.size + num);
+            return;
+        }
+
+        /** Render cells */
+        const match_cell = id.match(/^(r\d+c\d+)$/);
+        if (match_cell) {
+            const cell = this.cells.get(match_cell[1]);
+            if (typeof cell == 'undefined') {
+                action.err(new RangeError(`The cell '${match_cell[1]}' does not exist.`));
+                return;
+            }
+
+            action.cell(cell.index);
+            return;
+        }
+
+        /** Render houses */
+        const match_houses = id.match(/^(?:[A-Za-z]+\d+n\d+\s*&?\s*)+$/);
+        if (match_houses) {
+            const cell_sets = id
+                .split(/\s*&\s*/)
+                .map((edge_id) => {
+                    const house_id = edge_id.replace(/n\d+$/, '');
+                    return this.houses.get(house_id)?.cells;
+                })
+                .filter((cells) => (cells instanceof Set)) as Array<Set<string>>;
+            if (cell_sets.length == 0) {
+                action.err(new RangeError(`No houses have been found.`));
+                return;
+            }
+
+            const cells = Set.intersection(...cell_sets);
+            for (const cell_id of cells) {
+                const cell = this.cells.get(cell_id) as GameCell;
+                action.house(cell.index);
+            }
+            return;
+        }
+
+        action.err(new RangeError(`Failed to parse the input.`));
     }
 }
 

@@ -4,23 +4,44 @@
 
 export type AdjAttribute = { [key: string]: number; };
 
-const __attr_is_super = (attr1: AdjAttribute, attr2: AdjAttribute): boolean => {
-    for (const key in attr2) {
-        if (attr1[key] != attr2[key]) { return false; }
-    }
-    return true;
-};
+export type AdjTest = RegExp | AdjAttribute | ((e: AdjElement | Edge | Vertex) => boolean);
+
+// const __find_test = <T extends AdjElement>(e: T, tester: AdjTest): boolean => {
+//     if (tester instanceof RegExp) {
+//         return tester.test(e.selector);
+//     }
+//     else if (typeof tester == 'function') {
+//         return tester(e);
+//     }
+//     else if (typeof tester == 'object') {
+//         for (const key in tester) {
+//             if (tester[key] != e.attr[key]) { return false; }
+//         }
+//         return true;
+//     }
+//     else {
+//         throw TypeError('Invalid object for testing.');
+//     }
+// };
 
 /** Represents pure adjacency information. */
 export class AdjElement {
-    selector: string;
+    tagName: string;
+    className: string;
+    id: string;
     attr: AdjAttribute;
     adj: Map<string, AdjElement>;
 
-    constructor(selector: string = '', attr: AdjAttribute = {}) {
-        this.selector = selector;
+    constructor(id: string = '', class_name: string = '', attr: AdjAttribute = {}) {
+        this.tagName = 'element';
+        this.id = id;
+        this.className = class_name;
         this.attr = Object.assign({}, attr);
         this.adj = new Map<string, AdjElement>();
+    }
+
+    get selector() {
+        return `${this.tagName}${this.className} #{${this.id}}`;
     }
 
     /** Creates a unidirectional connection from this AdjElement to the specified AdjElement. */
@@ -44,37 +65,33 @@ export class AdjElement {
         return this.adj.values();
     }
 
-    /** Returns the first edge matching the ID and attrbutes. */
-    find(regex: RegExp, attr?: AdjAttribute): AdjElement | undefined {
-        if (attr) {
-            for (const e of this) {
-                if (regex.test(e.selector) && __attr_is_super(e.attr, attr)) { return e; }
-            }
-        }
-        else {
-            for (const e of this) {
-                if (regex.test(e.selector)) { return e; }
-            }
+    /** Returns the first AdjElement with selector matching the specified RegExp. */
+    find(regexp: RegExp): AdjElement | undefined {
+        for (const e of this) {
+            if (regexp.test(e.selector)) { return e; }
         }
     }
 
-    /** Returns the set of all edges matching the ID and attrbutes. */
-    findAll(regex: RegExp, attr?: AdjAttribute): AdjElement {
+    /** Returns the set of all AdjElement with selector matching the specified RegExp. */
+    findAll(regexp: RegExp): AdjElement {
         const result = new AdjElement();
-        if (attr) {
-            for (const e of this) {
-                if (regex.test(e.selector) && __attr_is_super(e.attr, attr)) { result.grab(e); }
-            }
-        }
-        else {
-            for (const e of this) {
-                if (regex.test(e.selector)) { result.grab(e); }
-            }
+        for (const e of this) {
+            if (regexp.test(e.selector)) { result.grab(e); }
         }
         return result;
     }
 
-    private unionReduce(e_set: AdjElement): AdjElement {
+    /** Returns the set of all AdjElement passing the specified predicate. */
+    filter(predicate: (e: AdjElement) => boolean): AdjElement {
+        const result = new AdjElement();
+        for (const e of this) {
+            if (predicate(e)) { result.grab(e); }
+        }
+        return result;
+    }
+
+    /** Merge this AdjElement with the specified AdjElement. */
+    mergeWith(e_set: AdjElement): AdjElement {
         for (const e of e_set) { this.grab(e); }
         return this;
     }
@@ -82,7 +99,7 @@ export class AdjElement {
     /** Computes the union of all point sets adjacent to this. */
     static union(e_iter: Iterable<AdjElement>): AdjElement {
         const result = new AdjElement();
-        for (const e of e_iter) { result.unionReduce(e); }
+        for (const e of e_iter) { result.mergeWith(e); }
         return result;
     }
 }
@@ -91,8 +108,9 @@ export class AdjElement {
 export class Edge extends AdjElement {
     v: Set<Vertex>;
 
-    constructor(selector: string = '', attr: AdjAttribute = {}) {
-        super(selector, attr);
+    constructor(id: string = '', class_name: string = '', attr: AdjAttribute = {}) {
+        super(id, class_name, attr);
+        this.tagName = 'e';
         this.v = new Set<Vertex>();
     }
 
@@ -119,23 +137,58 @@ export class Edge extends AdjElement {
         }
         return this;
     }
+
+    /** Recalculate the adjacency structure. */
+    recalc() {
+        this.adj.clear();
+        for (const v of this.v) {
+            this.grab(v);
+            v.grab(this);
+            for (const e_adj of v) {
+                this.grab(e_adj);
+                e_adj.grab(this);
+            }
+        }
+        return this;
+    }
+
+    /** Checks if it is multivalued or not. */
+    get isMultivalued(): boolean {
+        return this.v.size > 1;
+    }
+
+    /** Merge this AdjElement with the specified AdjElement. */
+    mergeWith(e_set: Edge): Edge {
+        for (const e of e_set) { this.grab(e); }
+        for (const v of e_set.v) { this.v.add(v); }
+        return this;
+    }
+
+    /** Creates an Edge instance from an iterable. */
+    static union(e_iter: Iterable<Edge>) {
+        const result = new Edge();
+        for (const e of e_iter) { result.mergeWith(e); }
+        return result;
+    }
 }
 
 
 export class Vertex extends Edge {
-    constructor(selector: string = '', attr: AdjAttribute = {}) {
-        super(selector, attr);
+    constructor(id: string = '', class_name: string = '', attr: AdjAttribute = {}) {
+        super(id, class_name, attr);
+        this.tagName = 'v';
         this.v.add(this);
     }
 
     /** Creates a mutual connection between this Vertex and the specified Edge. */
     link(e: Edge) {
         if (!e.v.has(this)) {
+            e.v.add(this);
             for (const e_adj of this) {
                 e.grab(e_adj);
+                e_adj.grab(e);
             }
             e.grab(this);
-            e.v.add(this);
             this.grab(e);
         }
         return this;
@@ -144,22 +197,20 @@ export class Vertex extends Edge {
     /** Removes the mutual connection between this Vertex and the specified Edge. */
     unlink(e: Edge) {
         if (e.v.has(this)) {
-            this.ungrab(e);
             e.v.delete(this);
-            e.adj.clear();
-            for (const v of e.v) {
-                for (const e_adj of v) {
-                    e.grab(e_adj);
-                }
+            this.ungrab(e);
+            e.recalc();
+            for (const e_adj of this) {
+                (e_adj as Edge).recalc();
             }
         }
         return this;
     }
 
     /** Returns all the vertices, other than the Vertex itself, that can see it. */
-    visibles(regex: RegExp, attr?: AdjAttribute): AdjElement {
+    visibles(regexp: RegExp): AdjElement {
         const result = AdjElement
-            .union(this.findAll(regex, attr))
+            .union(this.findAll(regexp))
             .findAll(/^v/)
             .ungrab(this);
         return result;
@@ -167,7 +218,7 @@ export class Vertex extends Edge {
 
     /** Returns the cell containing the Vertex. */
     cell() {
-        const e_rc = this.find(/^e #\{r\d+c\d+\}/) as Edge;
+        const e_rc = this.find(/^e.rule #\{r\d+c\d+\}/) as Edge;
         if (typeof e_rc == 'undefined') {
             throw Error(`Something is wrong; the vertex ${this.selector} is not linked to a cell.`);
         }

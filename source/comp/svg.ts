@@ -418,23 +418,23 @@ export class PuzzleCanvas extends SVG {
             'stroke-width': 0.75
         },
         'rect:determined': {
-            'fill': '#6fff83',
-            'stroke': 'olive',
+            'fill': 'hsl(216, 80%, 85%)',
+            'stroke': 'hsl(216, 50%, 25%)',
             'stroke-width': 0.75
         },
         'rect:based': {
-            'fill': '#00CED1', /** DarkTurquoise */
-            'stroke': '#2F4F4F', /** DarkSlateGrey */
-            'stroke-width': 0.75
-        },
-        'rect:intersect': {
-            'fill': '#73b2ff',
-            'stroke': 'blue',
+            'fill': 'hsl(142, 90%, 85%)',
+            'stroke': 'hsl(142, 50%, 25%)',
             'stroke-width': 0.75
         },
         'rect:affected': {
-            'fill': 'pink',
-            'stroke': 'red',
+            'fill': 'hsl(350, 80%, 90%)',
+            'stroke': 'hsl(350, 50%, 25%)',
+            'stroke-width': 0.75
+        },
+        'rect:intersect': {
+            'fill': 'hsl(200, 60%, 67%)',
+            'stroke': 'hsl(200, 30%, 25%)',
             'stroke-width': 0.75
         },
 

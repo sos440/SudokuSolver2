@@ -29,10 +29,10 @@ Solver.prototype.obviousCandidateRemoval = function (pz: Puzzle): StrategyResult
 
     /** For each determined vertex in a cell represented by its index: */
     for (const v_src of pz.findAll(/^v\.(?:given|found)/)) {
-        for (const v_targ of (v_src as Vertex).visibles(/^e #\{[rcb]\d+n\d+\}/)) {
+        for (const v_targ of (v_src as Vertex).visibles(/^e.rule #\{[rcb]\d+n\d+\}/)) {
             mem_seg.isUpdated = true;
             vid_rest.delete(v_targ.attr.index);
-            grp_cmds.push(`highlight mark ${v_targ.attr.index} as removed`);
+            grp_cmds.push(`highlight ${v_targ.id} as removed`);
         }
     }
 

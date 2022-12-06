@@ -9,6 +9,21 @@ export type DatabaseItem = {
 export const database: DatabaseItem[] = [
     {
         format: 'simple',
+        data: '147936825258147936369258147714693582825714693936825714471369258582471369693582471',
+        desc: 'Validity check: Solved'
+    },
+    {
+        format: 'simple',
+        data: '177936825258147936369258147714693582825714693936825714471369258582471369693582471',
+        desc: 'Validity check: Invalid'
+    },
+    {
+        format: 'simple',
+        data: '1.693.825258147936369258147714693582825714693936825714471369258582471369693582471',
+        desc: 'Validity check: Invalid'
+    },
+    {
+        format: 'simple',
         data: '956700000400800000300910700021000000000000300790000120000029003000008004000007650',
         desc: 'Diabolic grade from SudokuWiki. (6 NS2 / F2 / X-cycle / 2 XY-chain)'
     },

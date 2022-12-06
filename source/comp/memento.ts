@@ -157,7 +157,7 @@ export class StrategyResult {
     }
 
     export(): PartialMemento[] {
-        if (!this.isUpdated) {
+        if (!(this.isEnd || this.isUpdated)) {
             return [];
         }
         else if (this.segment.length == 1) {
@@ -168,5 +168,19 @@ export class StrategyResult {
             this.segment[this.segment.length - 1].type = 'final';
         }
         return this.segment;
+    }
+
+    static templateRemove(st_name: string, st_lv: string, vid_rest: Set<number>): StrategyResult {
+        const mem_seg = new StrategyResult();
+        mem_seg.addBlankMementos(2);
+        mem_seg.segment[0].logs = [`
+            <div class="msg_title ${st_lv}">
+                ${st_name}
+            </div>
+        `];
+        mem_seg.segment[0].snapshot.annotations = new Array<string>();
+        mem_seg.segment[1].snapshot.rest = new Set<number>(vid_rest);
+        mem_seg.segment[1].snapshot.annotations = [];
+        return mem_seg;
     }
 }

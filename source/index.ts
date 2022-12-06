@@ -1,6 +1,3 @@
-/**
- * Sudoku Solver (build 011)
- */
 import { GameSpecItem, GameSpecs } from './spec/spec';
 import { Puzzle, RawPuzzle } from './basic/puzzle';
 import { FormatOptions, IO } from './basic/io';
@@ -31,8 +28,9 @@ namespace LogConsole {
         for (const key in attr) {
             dom_line.setAttribute(key, attr[key as keyof typeof attr]);
         }
+        dom_line.className = 'line';
         dom_line.insertAdjacentHTML('beforeend', msg);
-        
+
         div_log.appendChild(dom_line);
         div_log.scrollTop = div_log.scrollHeight;
     };
@@ -64,15 +62,16 @@ namespace LogConsole {
 Editor.printLogs = (msg_list: string[], time: number): void => {
     const has_log = LogConsole.clear(time);
     if (has_log) { return; }
+    if (msg_list.length == 0) { return; }
 
     /** Writes down the log if it does not already exist. */
     LogConsole.log(msg_list.join(''), { time: time.toString() });
 };
 
 namespace TestRun {
-    const loadPuzzle = (input: string, format: FormatOptions) => {
-        const pz_raw = IO.import(input, GameSO, format);
-        const pz = new Puzzle(GameSO, pz_raw);
+    const loadPuzzle = (data: string, format: FormatOptions) => {
+        const pz_raw = IO.import(data, GameSO, format);
+        console.log(`Puzzle loaded: ${data}`);
 
         /** Initialize the editor. */
         Editor.snapshot.type = 'sudoku original (3)';
@@ -95,9 +94,19 @@ namespace TestRun {
 
     /** Strategy! */
     const strategy_list = [
+        Editor.validityCheck,
         Editor.obviousCandidateRemoval,
         Editor.nakedSingle,
-        Editor.hiddenSingle
+        Editor.hiddenSingle,
+        Editor.intersectionPointing,
+        Editor.intersectionClaiming,
+        Editor.nakedSubsetGenerator(2, 'Pair'),
+        Editor.nakedSubsetGenerator(3, 'Triple'),
+        Editor.hiddenSubsetGenerator(2, 'Pair'),
+        Editor.nakedSubsetGenerator(4, 'Quad'),
+        Editor.hiddenSubsetGenerator(3, 'Triple'),
+        Editor.hiddenSubsetGenerator(4, 'Quad'),
+        Editor.cannotProceed
     ];
 
     const solve_prev = () => {
@@ -110,26 +119,25 @@ namespace TestRun {
 
         if (History.atEnd()) {
             const pz = new Puzzle(GameSO, Editor.snapshot as RawPuzzle);
-            let pmem_seg = new StrategyResult();
+            let mem_seg = new StrategyResult();
             for (const strategy of strategy_list) {
-                pmem_seg = strategy.call(Editor, pz);
-                if (pmem_seg.isUpdated) {
-                    History.addSegment(pmem_seg.export());
+                mem_seg = strategy.call(Editor, pz);
+                if (mem_seg.isEnd) {
                     break;
                 }
-                else if (pmem_seg.isUpdated) {
-                    History.addSegment(pmem_seg.export());
+                else if (mem_seg.isUpdated) {
+                    History.addSegment(mem_seg.export());
                     break;
                 }
             }
 
             /** Some dirty code added to control the auto solver functionality. */
-            if (!(pmem_seg.isEnd || pmem_seg.isUpdated)) {
-                LogConsole.log(`
-                    <div class="msg_title error">
-                    Cannot proceed further.
-                    </div>
-                `);
+            if (mem_seg.isEnd) {
+                LogConsole.log(mem_seg.segment[0].logs.join(''));
+                autoSolverStatus.isActive = true;
+                auto_solve();
+            }
+            else if (!mem_seg.isUpdated) {
                 autoSolverStatus.isActive = true;
                 auto_solve();
             }

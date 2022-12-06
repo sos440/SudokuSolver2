@@ -2,7 +2,7 @@ import { Edge } from "./basic/adj";
 import { RawPuzzle, Puzzle } from "./basic/puzzle";
 import { PuzzleCanvasSnapshot, PuzzleCanvas, Attributes, SVG } from "./comp/svg";
 import { Originator, Memento } from "./comp/memento";
-import { GameSpecItem } from "./spec/spec";
+import { GameCell, GameSpecItem } from "./spec/spec";
 
 
 export class Solver extends Originator {
@@ -59,7 +59,7 @@ export class Solver extends Originator {
         svg.drawing.html('');
 
         /** Renders each cell. */
-        for (const e of pz.findAll(/e #\{r\d+c\d+\}/)) {
+        for (const e of pz.findAll(/^e\.rule #\{r\d+c\d+\}/)) {
             const vset = (e as Edge).v;
 
             if (vset.size == 1) {
@@ -93,21 +93,17 @@ export class Solver extends Originator {
         /** Render annotations. */
         for (const cmd of grp_cmds) {
             /** Match highlights. */
-            const match_hl = cmd.match(/^highlight (\S+) ([\d\s,]+) as (.*)$/);
-            const match_uhl = cmd.match(/^unhighlight (\S+) ([\d\s,]+)$/);
+            const match_highlight = cmd.match(/^\s*highlight\s+(.+)\s+as\s+(.+)\s*$/);
+            if (match_highlight == null) { continue; }
 
-            if (match_hl) {
-                const type = match_hl[1];
-                const arg_list = match_hl[2].split(/[\s,]+/).map((s) => Number.parseInt(s));
-                const class_name = match_hl[3];
-
-                for (const arg of arg_list) {
-                    if (arg < 0) { continue; }
-                    else if (type == 'mark') {
-                        svg.markRects.show(arg)?.attr(o[`rect:${class_name}`]);
-                        svg.markTexts.get(arg)?.attr(o[`text:${class_name}`]);
+            const class_name = match_highlight[2];
+            for (const id of match_highlight[1].split(/\s*,\s*/)) {
+                this.gameSpec.parseID(id, {
+                    mark: (v_id: number) => {
+                        svg.markRects.show(v_id)?.attr(o[`rect:${class_name}`]);
+                        svg.markTexts.get(v_id)?.attr(o[`text:${class_name}`]);
                         if (class_name == 'removed') {
-                            const mark_elem = (svg.markRects.get(arg) as SVG).element;
+                            const mark_elem = (svg.markRects.get(v_id) as SVG).element;
                             const x = mark_elem.getAttribute('x');
                             const y = mark_elem.getAttribute('y');
                             const w = mark_elem.getAttribute('width');
@@ -116,64 +112,42 @@ export class Solver extends Originator {
                                 .path({ 'd': `M ${x} ${y} l ${w} ${h} m -${w} 0 l ${w} -${h}` })
                                 .attr({ 'stroke': 'red' })
                         }
-                    }
-                    else if (type == 'cell' || type == 'rc') {
-                        svg.cellRects.show(arg)?.attr(o[`rect:${class_name}`]);
-                        svg.cellTexts.get(arg)?.attr(o[`text:${class_name}`]);
-                    }
-                    else if (type == 'row') {
-                        for (let j = 0; j < o['columns']; j++) {
-                            const id = arg * o['columns'] + j;
-                            svg.cellRects.show(id)?.attr(o[`rect:${class_name}`]);
-                            svg.cellTexts.get(id)?.attr(o[`text:${class_name}`]);
-                        }
-                    }
-                    else if (type == 'col') {
-                        for (let i = 0; i < o['rows']; i++) {
-                            const id = i * o['columns'] + arg;
-                            svg.cellRects.show(id)?.attr(o[`rect:${class_name}`]);
-                            svg.cellTexts.get(id)?.attr(o[`text:${class_name}`]);
-                        }
-                    }
-                    else if (type == 'box') {
-                        /** @todo Implement a more robust way of drawing a puzzle. */
-                    }
-                }
+                    },
+                    cell: (cell_id: number) => {
+                        svg.cellRects.show(cell_id)?.attr(o[`rect:${class_name}`]);
+                        svg.cellTexts.get(cell_id)?.attr(o[`text:${class_name}`]);
+                    },
+                    house: (cell_id: number) => {
+                        svg.cellRects.show(cell_id)?.attr(o[`rect:${class_name}`]);
+                        svg.cellTexts.get(cell_id)?.attr(o[`text:${class_name}`]);
+                    },
+                    err: (e: Error) => {}
+                });
             }
-            else if (match_uhl) {
-                const type = match_uhl[1];
-                const arg_list = match_uhl[2].split(/[\s,]+/).map((s) => Number.parseInt(s));
+            // else if (match_uhl) {
+            //     const type = match_uhl[1];
+            //     const arg_list = match_uhl[2].split(/[\s,]+/).map((s) => Number.parseInt(s));
 
-                for (const arg of arg_list) {
-                    if (arg < 0) { continue; }
-                    else if (type == 'mark') {
-                        svg.markRects.clearStyle(arg);
-                        svg.markRects.hide(arg);
-                        svg.markTexts.clearStyle(arg);
-                    }
-                    else if (type == 'cell' || type == 'rc') {
-                        svg.cellRects.clearStyle(arg);
-                        svg.cellTexts.clearStyle(arg);
-                    }
-                    else if (type == 'row') {
-                        for (let j = 0; j < o['columns']; j++) {
-                            const id = arg * o['columns'] + j;
-                            svg.cellRects.clearStyle(id);
-                            svg.cellTexts.clearStyle(id);
-                        }
-                    }
-                    else if (type == 'col') {
-                        for (let i = 0; i < o['rows']; i++) {
-                            const id = i * o['columns'] + arg;
-                            svg.cellRects.clearStyle(id);
-                            svg.cellTexts.clearStyle(id);
-                        }
-                    }
-                    else if (type == 'box') {
-                        /** @todo Implement a more robust way of drawing a puzzle. */
-                    }
-                }
-            }
+            //     for (const arg of arg_list) {
+            //         if (arg < 0) { continue; }
+            //         else if (type == 'mark') {
+            //             svg.markRects.clearStyle(arg);
+            //             svg.markRects.hide(arg);
+            //             svg.markTexts.clearStyle(arg);
+            //         }
+            //         else if (type == 'cell') {
+            //             svg.cellRects.clearStyle(arg);
+            //             svg.cellTexts.clearStyle(arg);
+            //         }
+            //         else if (type == 'house') {
+            //             for (let j = 0; j < o['columns']; j++) {
+            //                 const id = arg * o['columns'] + j;
+            //                 svg.cellRects.clearStyle(id);
+            //                 svg.cellTexts.clearStyle(id);
+            //             }
+            //         }
+            //     }
+            // }
 
             /** Match line draws */
         }
